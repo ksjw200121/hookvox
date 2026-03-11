@@ -1,0 +1,61 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+:root {
+  --brand: #ff3d30;
+  --brand-dark: #c8150a;
+  --surface: #111113;
+  --surface-2: #1a1a1e;
+  --border: rgba(255,255,255,0.08);
+}
+
+* {
+  box-sizing: border-box;
+}
+
+body {
+  background-color: #0a0a0b;
+  color: white;
+}
+
+/* Scrollbar */
+::-webkit-scrollbar { width: 6px; }
+::-webkit-scrollbar-track { background: #111113; }
+::-webkit-scrollbar-thumb { background: #333; border-radius: 3px; }
+::-webkit-scrollbar-thumb:hover { background: #555; }
+
+/* Glass card */
+.glass {
+  background: rgba(255, 255, 255, 0.03);
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  backdrop-filter: blur(10px);
+}
+
+/* Score ring animation */
+@keyframes scoreRing {
+  from { stroke-dashoffset: 283; }
+  to { stroke-dashoffset: var(--score-offset); }
+}
+
+.score-ring { animation: scoreRing 1.5s ease-out forwards; }
+
+/* Gradient text */
+.gradient-text {
+  background: linear-gradient(135deg, #ff3d30, #ff6b61, #ffb5b0);
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
+  background-clip: text;
+}
+
+/* Loading shimmer */
+@keyframes shimmer {
+  0% { background-position: -200px 0; }
+  100% { background-position: calc(200px + 100%) 0; }
+}
+
+.shimmer {
+  background: linear-gradient(90deg, #1a1a1e 25%, #222228 50%, #1a1a1e 75%);
+  background-size: 200px 100%;
+  animation: shimmer 1.5s infinite;
+}

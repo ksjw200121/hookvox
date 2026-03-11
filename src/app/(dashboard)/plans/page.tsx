@@ -1,0 +1,331 @@
+'use client'
+// src/app/(dashboard)/plans/page.tsx
+import { useState, useEffect } from 'react'
+
+type BillingCycle = 'monthly' | 'quarterly' | 'biannual' | 'annual'
+
+const BILLING_OPTIONS = [
+  { key: 'monthly'   as BillingCycle, label: '月繳',   discount: '',      months: 1,  multiplier: 1    },
+  { key: 'quarterly' as BillingCycle, label: '季繳',   discount: '省10%', months: 3,  multiplier: 0.9  },
+  { key: 'biannual'  as BillingCycle, label: '半年繳', discount: '省15%', months: 6,  multiplier: 0.85 },
+  { key: 'annual'    as BillingCycle, label: '年繳',   discount: '省20%', months: 12, multiplier: 0.8  },
+]
+
+const PLANS = [
+  {
+    key: 'FREE',
+    name: '免費試用',
+    normalMonthly: 0,
+    earlybirdMonthly: 0,
+    features: ['3 次體驗機會（總計）', '完整功能試用', '腳本 + 標題 + 分鏡', '不需信用卡'],
+    highlight: false,
+    cta: '體驗中',
+    badge: '',
+  },
+  {
+    key: 'BASIC',
+    name: '基礎版',
+    normalMonthly: 590,
+    earlybirdMonthly: 490,
+    features: ['60 次/月', '腳本 + 標題 + 分鏡', '12 個行業專屬設定', '爆款資料庫', '套用替換功能'],
+    highlight: true,
+    cta: '升級基礎版',
+    badge: '最多人選',
+  },
+  {
+    key: 'PRO',
+    name: '專業版',
+    normalMonthly: 1490,
+    earlybirdMonthly: 990,
+    features: ['200 次/月', '腳本 + 標題 + 分鏡', '12 個行業專屬設定', '爆款資料庫', '優先客服支援', '升級差額計算'],
+    highlight: false,
+    cta: '升級專業版',
+    badge: '重度使用者',
+  },
+]
+
+const EARLY_BIRD_CODE = 'JS2026'
+
+function calcTotal(monthly: number, cycle: BillingCycle) {
+  if (monthly === 0) return 0
+  const opt = BILLING_OPTIONS.find(o => o.key === cycle)!
+  return Math.round(monthly * opt.months * opt.multiplier)
+}
+
+export default function PlansPage() {
+  const [currentPlan, setCurrentPlan] = useState('FREE')
+  const [billing, setBilling] = useState<BillingCycle>('monthly')
+  const [loading, setLoading] = useState(false)
+  const [selectedPlan, setSelectedPlan] = useState('')
+  const [agreed, setAgreed] = useState(false)
+  const [showAgreement, setShowAgreement] = useState(false)
+  const [pendingPlan, setPendingPlan] = useState('')
+  const [couponInput, setCouponInput] = useState('')
+  const [couponApplied, setCouponApplied] = useState(false)
+  const [couponError, setCouponError] = useState('')
+
+  useEffect(() => {
+    fetch('/api/usage').then(r => r.json()).then(d => {
+      if (d.plan) setCurrentPlan(d.plan)
+    }).catch(() => {})
+  }, [])
+
+  const handleApplyCoupon = () => {
+    if (couponInput.trim().toUpperCase() === EARLY_BIRD_CODE) {
+      setCouponApplied(true)
+      setCouponError('')
+    } else {
+      setCouponApplied(false)
+      setCouponError('折扣碼無效，請確認後再試')
+    }
+  }
+
+  const getMonthly = (plan: typeof PLANS[0]) => {
+    if (plan.normalMonthly === 0) return 0
+    return couponApplied ? plan.earlybirdMonthly : plan.normalMonthly
+  }
+
+  const handleUpgradeClick = (planKey: string) => {
+    if (planKey === 'FREE' || planKey === currentPlan) return
+    setPendingPlan(planKey)
+    setShowAgreement(true)
+  }
+
+  const handleConfirmUpgrade = async () => {
+    if (!agreed) return
+    setShowAgreement(false)
+    setSelectedPlan(pendingPlan)
+    setLoading(true)
+    alert(`升級 ${pendingPlan} 方案功能即將開放，請至帳單頁面設定付款方式`)
+    setLoading(false)
+    setAgreed(false)
+  }
+
+  const selectedOpt = BILLING_OPTIONS.find(o => o.key === billing)!
+
+  return (
+    <div className="max-w-5xl mx-auto space-y-8 animate-fade-in">
+      <div className="text-center">
+        <h1 className="text-4xl font-black mb-3">選擇方案</h1>
+        <p className="text-white/40">月繳、季繳、半年、年繳，怎麼划算怎麼選</p>
+      </div>
+
+      {/* 折扣碼 */}
+      <div className="glass rounded-2xl p-6">
+        <div className="flex flex-col sm:flex-row items-start sm:items-center gap-3">
+          <div className="flex-1">
+            <label className="text-sm text-white/60 mb-2 block">有早鳥折扣碼嗎？</label>
+            <div className="flex gap-2">
+              <input
+                type="text"
+                value={couponInput}
+                onChange={e => { setCouponInput(e.target.value.toUpperCase()); setCouponError('') }}
+                onKeyDown={e => e.key === 'Enter' && handleApplyCoupon()}
+                placeholder="輸入折扣碼"
+                className="bg-white/5 border border-white/10 rounded-lg px-4 py-2 text-sm text-white placeholder-white/30 focus:outline-none focus:border-brand-500 w-48 uppercase"
+              />
+              <button
+                onClick={handleApplyCoupon}
+                className="bg-brand-500 hover:bg-brand-400 text-white px-4 py-2 rounded-lg text-sm font-medium transition-colors"
+              >
+                套用
+              </button>
+            </div>
+            {couponError && <p className="text-red-400 text-xs mt-1.5">{couponError}</p>}
+          </div>
+          {couponApplied && (
+            <div className="bg-green-500/10 border border-green-500/30 text-green-400 px-4 py-3 rounded-xl text-sm font-medium">
+              🎉 早鳥優惠已套用！
+            </div>
+          )}
+        </div>
+      </div>
+
+      {/* 繳費週期 */}
+      <div className="flex justify-center">
+        <div className="inline-flex bg-white/5 border border-white/10 rounded-xl p-1 gap-1">
+          {BILLING_OPTIONS.map(opt => (
+            <button
+              key={opt.key}
+              onClick={() => setBilling(opt.key)}
+              className={`px-4 py-2 rounded-lg text-sm font-medium transition-all ${
+                billing === opt.key ? 'bg-brand-500 text-white' : 'text-white/50 hover:text-white'
+              }`}
+            >
+              {opt.label}
+              {opt.discount && (
+                <span className={`ml-1.5 text-xs px-1.5 py-0.5 rounded-full ${
+                  billing === opt.key ? 'bg-white/20 text-white' : 'bg-green-500/20 text-green-400'
+                }`}>
+                  {opt.discount}
+                </span>
+              )}
+            </button>
+          ))}
+        </div>
+      </div>
+
+      {/* 方案卡片 */}
+      <div className="grid md:grid-cols-3 gap-6">
+        {PLANS.map(plan => {
+          const isCurrent = currentPlan === plan.key
+          const monthly = getMonthly(plan)
+          const total = calcTotal(monthly, billing)
+          const normalTotal = calcTotal(plan.normalMonthly, billing)
+          const isDiscounted = couponApplied && plan.normalMonthly > 0
+
+          return (
+            <div
+              key={plan.key}
+              className={`rounded-2xl p-8 relative flex flex-col ${
+                plan.highlight ? 'bg-brand-500 ring-2 ring-brand-400' : 'glass'
+              }`}
+            >
+              {plan.badge && (
+                <div className={`absolute -top-3 left-1/2 -translate-x-1/2 text-xs font-black px-4 py-1 rounded-full ${
+                  plan.highlight ? 'bg-white text-brand-600' : 'bg-brand-500 text-white'
+                }`}>
+                  {plan.badge}
+                </div>
+              )}
+
+              <div className="mb-6">
+                <h3 className="font-bold text-lg mb-3">{plan.name}</h3>
+                {plan.normalMonthly === 0 ? (
+                  <div className="text-4xl font-black">NT$0</div>
+                ) : (
+                  <div>
+                    {isDiscounted && (
+                      <div className={`text-xs line-through mb-1 ${plan.highlight ? 'text-white/40' : 'text-white/30'}`}>
+                        {billing === 'monthly'
+                          ? `NT$${plan.normalMonthly.toLocaleString()}/月`
+                          : `NT$${normalTotal.toLocaleString()}/${selectedOpt.months}個月`}
+                      </div>
+                    )}
+                    <div className="flex items-end gap-1">
+                      <span className="text-4xl font-black">
+                        NT${(billing === 'monthly' ? monthly : total).toLocaleString()}
+                      </span>
+                      <span className={`text-sm pb-1 ${plan.highlight ? 'text-white/70' : 'text-white/40'}`}>
+                        {selectedOpt.months > 1 ? `/${selectedOpt.months}個月` : '/月'}
+                      </span>
+                    </div>
+                    {selectedOpt.months > 1 && (
+                      <div className={`text-xs mt-1 ${plan.highlight ? 'text-white/60' : 'text-white/40'}`}>
+                        平均 NT${Math.round(total / selectedOpt.months).toLocaleString()}/月
+                      </div>
+                    )}
+                    {isDiscounted && (
+                      <div className="text-xs text-yellow-400 mt-1">🎉 早鳥折扣已套用</div>
+                    )}
+                  </div>
+                )}
+              </div>
+
+              <ul className="space-y-2.5 flex-1 mb-6">
+                {plan.features.map(f => (
+                  <li key={f} className={`text-sm flex items-start gap-2 ${plan.highlight ? 'text-white/90' : 'text-white/60'}`}>
+                    <span className="mt-0.5 text-green-400 text-xs">✓</span>
+                    {f}
+                  </li>
+                ))}
+              </ul>
+
+              <button
+                onClick={() => handleUpgradeClick(plan.key)}
+                disabled={isCurrent || plan.key === 'FREE' || loading}
+                className={`w-full py-3 rounded-xl font-bold text-sm transition-all ${
+                  isCurrent || plan.key === 'FREE'
+                    ? 'bg-white/10 text-white/40 cursor-default'
+                    : plan.highlight
+                    ? 'bg-white text-brand-600 hover:bg-white/90 hover:scale-[1.02]'
+                    : 'bg-white/10 hover:bg-white/15 text-white'
+                }`}
+              >
+                {isCurrent ? '✓ 目前方案' : loading && selectedPlan === plan.key ? '處理中...' : plan.cta}
+              </button>
+            </div>
+          )
+        })}
+      </div>
+
+      {/* 旗艦版 */}
+      <div className="glass rounded-2xl p-6 flex items-center justify-between flex-wrap gap-4">
+        <div>
+          <div className="font-bold text-lg mb-1">旗艦版 · 500次/月</div>
+          <div className="text-white/50 text-sm">
+            適合代操公司或重度創作者。月繳 NT$2,990
+            {couponApplied && <span className="text-yellow-400 ml-2">→ 早鳥 NT$1,990</span>}
+          </div>
+        </div>
+        <button
+          onClick={() => handleUpgradeClick('FLAGSHIP')}
+          className="bg-white/10 hover:bg-white/15 text-white px-6 py-3 rounded-xl font-bold text-sm transition-colors whitespace-nowrap"
+        >
+          升級旗艦版
+        </button>
+      </div>
+
+      {/* 常見問題 */}
+      <div className="glass rounded-2xl p-8">
+        <h3 className="font-bold text-xl mb-6">常見問題</h3>
+        <div className="space-y-5">
+          {[
+            { q: '可以隨時取消嗎？', a: '可以，訂閱可在任何時候取消，取消後仍可使用至當期結束。' },
+            { q: '基礎版不夠用可以升級嗎？', a: '可以，升級時只計算剩餘天數的差額，不需要重新購買整個方案。' },
+            { q: '次數是怎麼計算的？', a: '每按一次「生成腳本」計算一次，分析影片和生成分鏡都包含在內，不另外計算。' },
+            { q: '支援哪些付款方式？', a: '透過綠界科技金流，支援信用卡（VISA/MasterCard/JCB）付款。' },
+            { q: '有退款政策嗎？', a: '本服務為數位內容，付款後即可立即使用。依消費者保護法第19條，數位內容一經提供即喪失鑑賞期退款權利，付款前請詳閱並確認同意。' },
+          ].map(faq => (
+            <div key={faq.q} className="border-b border-white/5 pb-5 last:border-0 last:pb-0">
+              <h4 className="font-medium mb-1.5">{faq.q}</h4>
+              <p className="text-white/50 text-sm leading-relaxed">{faq.a}</p>
+            </div>
+          ))}
+        </div>
+      </div>
+
+      {/* 同意彈窗 */}
+      {showAgreement && (
+        <div className="fixed inset-0 bg-black/70 backdrop-blur-sm z-50 flex items-center justify-center p-6">
+          <div className="bg-dark-800 border border-white/10 rounded-2xl p-8 max-w-md w-full">
+            <h3 className="font-bold text-xl mb-4">升級前請確認</h3>
+            <div className="bg-white/5 rounded-xl p-4 text-sm text-white/70 leading-relaxed mb-6">
+              本服務為數位內容服務，付款後即可立即開始使用。
+              <br /><br />
+              依據消費者保護法第19條第1項第6款，<strong className="text-white">數位內容一經提供，即喪失七天鑑賞期之退款權利</strong>，確認付款後不得以鑑賞期為由申請退款。
+            </div>
+            <label className="flex items-start gap-3 cursor-pointer mb-6">
+              <input
+                type="checkbox"
+                checked={agreed}
+                onChange={e => setAgreed(e.target.checked)}
+                className="mt-0.5 w-4 h-4 accent-brand-500"
+              />
+              <span className="text-sm text-white/70">
+                我已閱讀並同意上述條款，確認付款後不適用鑑賞期退款
+              </span>
+            </label>
+            <div className="flex gap-3">
+              <button
+                onClick={() => { setShowAgreement(false); setAgreed(false) }}
+                className="flex-1 py-3 rounded-xl bg-white/10 text-white/60 font-medium text-sm hover:bg-white/15 transition-colors"
+              >
+                取消
+              </button>
+              <button
+                onClick={handleConfirmUpgrade}
+                disabled={!agreed}
+                className={`flex-1 py-3 rounded-xl font-bold text-sm transition-all ${
+                  agreed ? 'bg-brand-500 text-white hover:bg-brand-400' : 'bg-white/10 text-white/30 cursor-not-allowed'
+                }`}
+              >
+                確認升級
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+    </div>
+  )
+}
