@@ -12,7 +12,11 @@ export interface TitleResult {
 }
 
 export async function generateTitles(topic: string): Promise<TitleResult[]> {
-  const prompt = getTitleGenerationPrompt(topic)
+  const prompt = getTitleGenerationPrompt({
+  industry: "GENERAL",
+  topic,
+  targetAudience: "",
+})
 
   const response = await openai.chat.completions.create({
     model: 'gpt-4o',

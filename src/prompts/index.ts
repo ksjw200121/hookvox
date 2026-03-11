@@ -328,3 +328,94 @@ ${script}
 }
 `;
 }
+
+export function getAnalyzeContentPrompt(params: {
+  transcript?: string;
+  urlAnalysis?: {
+    platform?: string;
+    title?: string;
+    description?: string;
+    author?: string;
+    resolvedText?: string;
+    rawMeta?: Record<string, string>;
+  };
+}): string {
+  const { transcript, urlAnalysis } = params;
+
+  return `
+你是短影音爆款內容分析師。
+你要分析這支影片為什麼容易吸引人、為什麼有機會爆，並整理出後續可拿來改寫腳本的重點。
+
+規則：
+1. 用繁體中文
+2. 分析要白話、直接
+3. 不要寫成文章
+4. 要提煉出可複用的爆款結構
+5. 如果逐字稿不足，就參考網址解析內容一起判斷
+6. 不要亂掰看不到的資訊
+7. 請只回傳合法 JSON，不要 markdown，不要任何多餘文字，直接從 { 開始
+
+【逐字稿】
+${transcript || ""}
+
+【網址解析資訊】
+${JSON.stringify(urlAnalysis || {}, null, 2)}
+
+請輸出成以下 JSON 格式：
+
+{
+  "coreTopic": "這支影片核心在講什麼",
+  "targetAudience": "這支影片主要在打誰",
+  "hookStyle": "開頭鉤子的類型",
+  "emotionalTriggers": ["情緒點1", "情緒點2", "情緒點3"],
+  "contentStructure": ["步驟1", "步驟2", "步驟3", "步驟4"],
+  "persuasionMechanics": ["說服機制1", "說服機制2", "說服機制3"],
+  "keyAngles": ["可借用角度1", "可借用角度2", "可借用角度3"],
+  "ctaStyle": "這支影片最後怎麼引導互動或轉換",
+  "summary": "用白話總結這支影片為什麼有效"
+}
+`;
+}
+
+export function getIdeaGenerationPrompt(params: {
+  topic: string;
+  industry?: Industry;
+  targetAudience?: string;
+}): string {
+  const { topic, industry = "GENERAL", targetAudience = "" } = params;
+
+  return `
+${BRAND_STYLE}
+
+你是短影音企劃發想助手。
+
+任務：
+根據用戶主題，產出適合短影音的內容點子。
+重點是要能拍、能講、能吸引人，不要太空泛。
+
+產業：${industry}
+主題：${topic}
+目標受眾：${targetAudience}
+
+請生成 10 個短影音主題點子。
+
+每個點子都要包含：
+1. title：題目
+2. hook：開頭一句
+3. angle：這支影片切入角度
+4. whyItWorks：為什麼這題容易吸引人
+
+請只回傳合法 JSON，不要 markdown，不要多餘說明，直接從 { 開始。
+
+{
+  "ideas": [
+    {
+      "title": "點子1",
+      "hook": "開頭鉤子",
+      "angle": "切入角度",
+      "whyItWorks": "為什麼有效"
+    }
+  ]
+}
+`;
+}

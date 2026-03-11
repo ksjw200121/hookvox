@@ -14,7 +14,7 @@ export interface IdeaResult {
 }
 
 export async function generateIdeas(topic: string): Promise<IdeaResult[]> {
-  const prompt = getIdeaGenerationPrompt(topic)
+  const prompt = getIdeaGenerationPrompt({ topic })
 
   const response = await openai.chat.completions.create({
     model: 'gpt-4o',

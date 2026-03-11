@@ -29,7 +29,13 @@ export async function generateScripts(topic: string, analysisData?: object): Pro
   // Generate all 6 scripts in parallel
   await Promise.all(
     styles.map(async (style) => {
-      const prompt = getScriptGenerationPrompt(topic, style, analysisData)
+      const prompt = getScriptGenerationPrompt({
+  industry: "GENERAL",
+  topic,
+  targetAudience: "",
+  ctaGoal: "",
+  viralAnalysis: analysisData,
+})
       const response = await openai.chat.completions.create({
         model: 'gpt-4o',
         messages: [{ role: 'user', content: prompt }],

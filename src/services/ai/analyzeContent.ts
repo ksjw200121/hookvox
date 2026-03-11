@@ -30,7 +30,7 @@ export interface AnalysisResult {
 }
 
 export async function analyzeContent(data: ContentData): Promise<AnalysisResult> {
-  const prompt = getAnalyzeContentPrompt(data.caption, data.likes, data.comments, data.views)
+  const prompt = getAnalyzeContentPrompt({ transcript: data.caption })
 
   const response = await openai.chat.completions.create({
     model: 'gpt-4o',

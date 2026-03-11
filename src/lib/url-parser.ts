@@ -48,7 +48,9 @@ function extractTitle(html: string) {
 }
 
 function extractJsonLdText(html: string) {
-  const matches = Array.from(html.matchAll(/<script[^>]*type=["']application\/ld\+json["'][^>]*>([\s\S]*?)<\/script>/gi));
+  const matches = Array.from(
+    html.matchAll(/<script[^>]*type=["']application\/ld\+json["'][^>]*>([\s\S]*?)<\/script>/gi)
+  );
   const collected: string[] = [];
   for (const m of matches) {
     try {
@@ -89,7 +91,8 @@ export async function parsePublicUrl(url: string): Promise<ParsedUrlResult> {
 
   const res = await fetch(url, {
     headers: {
-      "user-agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/127.0.0.0 Safari/537.36",
+      "user-agent":
+        "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/127.0.0.0 Safari/537.36",
       "accept-language": "zh-TW,zh;q=0.9,en;q=0.8",
       accept: "text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8",
       referer: "https://www.google.com/",
