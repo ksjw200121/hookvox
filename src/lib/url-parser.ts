@@ -35,12 +35,10 @@ function extractMeta(html: string, key: string) {
     new RegExp(`<meta[^>]+name=["']${key}["'][^>]+content=["']([^"']*)["']`, "i"),
     new RegExp(`<meta[^>]+content=["']([^"']*)["'][^>]+name=["']${key}["']`, "i"),
   ];
-
   for (const pattern of patterns) {
     const match = html.match(pattern);
     if (match?.[1]) return cleanText(match[1]);
   }
-
   return "";
 }
 
@@ -52,36 +50,30 @@ function extractTitle(html: string) {
 function extractJsonLdText(html: string) {
   const matches = Array.from(html.matchAll(/<script[^>]*type=["']application\/ld\+json["'][^>]*>([\s\S]*?)<\/script>/gi));
   const collected: string[] = [];
-
   for (const m of matches) {
     try {
       const raw = m[1]?.trim();
       if (!raw) continue;
-
       const parsed = JSON.parse(raw);
-
-      const walk = (obj: any) => {
+      const walk = (obj: unknown) => {
         if (!obj || typeof obj !== "object") return;
-
-        if (typeof obj.caption === "string") collected.push(obj.caption);
-        if (typeof obj.description === "string") collected.push(obj.description);
-        if (typeof obj.name === "string") collected.push(obj.name);
-        if (typeof obj.text === "string") collected.push(obj.text);
-        if (typeof obj.headline === "string") collected.push(obj.headline);
-
-        for (const key of Object.keys(obj)) {
-          const value = obj[key];
+        const o = obj as Record<string, unknown>;
+        if (typeof o.caption === "string") collected.push(o.caption);
+        if (typeof o.description === "string") collected.push(o.description);
+        if (typeof o.name === "string") collected.push(o.name);
+        if (typeof o.text === "string") collected.push(o.text);
+        if (typeof o.headline === "string") collected.push(o.headline);
+        for (const key of Object.keys(o)) {
+          const value = o[key];
           if (Array.isArray(value)) value.forEach(walk);
           else if (value && typeof value === "object") walk(value);
         }
       };
-
       walk(parsed);
     } catch {
       // ignore broken json
     }
   }
-
   return cleanText(collected.join(" "));
 }
 
@@ -97,8 +89,7 @@ export async function parsePublicUrl(url: string): Promise<ParsedUrlResult> {
 
   const res = await fetch(url, {
     headers: {
-      "user-agent":
-        "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/127.0.0.0 Safari/537.36",
+      "user-agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/127.0.0.0 Safari/537.36",
       "accept-language": "zh-TW,zh;q=0.9,en;q=0.8",
       accept: "text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8",
       referer: "https://www.google.com/",
@@ -107,7 +98,7 @@ export async function parsePublicUrl(url: string): Promise<ParsedUrlResult> {
   });
 
   if (!res.ok) {
-    throw new Error(`?��?讀?�網?�?�容，HTTP ${res.status}`);
+    throw new Error(`無法取得網頁，HTTP ${res.status}`);
   }
 
   const html = await res.text();
@@ -127,7 +118,6 @@ export async function parsePublicUrl(url: string): Promise<ParsedUrlResult> {
   const description = pickFirst(ogDescription, twitterDescription, descriptionMeta);
   const author = pickFirst(authorMeta, siteName);
   const thumbnail = pickFirst(ogImage);
-
   const resolvedText = pickFirst(description, jsonLdText);
 
   return {
