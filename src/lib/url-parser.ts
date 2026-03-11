@@ -50,7 +50,7 @@ function extractTitle(html: string) {
 }
 
 function extractJsonLdText(html: string) {
-  const matches = [...html.matchAll(/<script[^>]*type=["']application\/ld\+json["'][^>]*>([\s\S]*?)<\/script>/gi)];
+  const matches = Array.from(html.matchAll(/<script[^>]*type=["']application\/ld\+json["'][^>]*>([\s\S]*?)<\/script>/gi));
   const collected: string[] = [];
 
   for (const m of matches) {
@@ -107,7 +107,7 @@ export async function parsePublicUrl(url: string): Promise<ParsedUrlResult> {
   });
 
   if (!res.ok) {
-    throw new Error(`無法讀取網址內容，HTTP ${res.status}`);
+    throw new Error(`?��?讀?�網?�?�容，HTTP ${res.status}`);
   }
 
   const html = await res.text();
