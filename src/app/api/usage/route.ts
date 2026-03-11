@@ -1,51 +1,48 @@
 // src/app/api/usage/route.ts
 import { NextRequest, NextResponse } from 'next/server'
-import { createSupabaseServerClient } from '@/lib/supabase-server'
-import { prisma } from '@/lib/prisma'
-import { getTodayUsage, getUserPlan, PLAN_LIMITS } from '@/lib/usage'
-import { UsageAction } from '@prisma/client'
+import { createClient } from '@supabase/supabase-js'
+
+function getSupabaseAdmin() {
+  return createClient(
+    process.env.NEXT_PUBLIC_SUPABASE_URL!,
+    process.env.SUPABASE_SERVICE_ROLE_KEY!
+  )
+}
 
 export async function GET(req: NextRequest) {
   try {
-    const supabase = createSupabaseServerClient()
-    const { data: { user } } = await supabase.auth.getUser()
-    if (!user) return NextResponse.json({ error: '請先登入' }, { status: 401 })
-
-    let dbUser = await prisma.user.findUnique({ where: { supabaseId: user.id } })
-    if (!dbUser) {
-      dbUser = await prisma.user.create({
-        data: { supabaseId: user.id, email: user.email!, subscription: { create: {} } },
-      })
+    const authHeader = req.headers.get('Authorization')
+    if (!authHeader?.startsWith('Bearer ')) {
+      return NextResponse.json({ error: '未登入' }, { status: 401 })
     }
+    const token = authHeader.replace('Bearer ', '').trim()
+    const supabaseAdmin = getSupabaseAdmin()
+    const { data: { user }, error } = await supabaseAdmin.auth.getUser(token)
+    if (error || !user) return NextResponse.json({ error: '未登入' }, { status: 401 })
 
-    const plan = await getUserPlan(dbUser.id)
-    const limits = PLAN_LIMITS[plan]
+    const now = new Date()
+    const startOfMonth = new Date(now.getFullYear(), now.getMonth(), 1).toISOString()
 
-    const [analyzeUsed, scriptUsed, titleUsed, ideaUsed] = await Promise.all([
-      getTodayUsage(dbUser.id, UsageAction.ANALYZE),
-      getTodayUsage(dbUser.id, UsageAction.GENERATE_SCRIPT),
-      getTodayUsage(dbUser.id, UsageAction.GENERATE_TITLES),
-      getTodayUsage(dbUser.id, UsageAction.GENERATE_IDEAS),
-    ])
+    const { count } = await supabaseAdmin
+      .from('usage_logs')
+      .select('*', { count: 'exact', head: true })
+      .eq('userId', user.id)
+      .gte('createdAt', startOfMonth)
 
-    const recentContents = await prisma.content.findMany({
-      where: { userId: dbUser.id },
-      orderBy: { createdAt: 'desc' },
-      take: 5,
-      include: { analysis: true },
-    })
+    const used = count ?? 0
+    const limit = 3
 
     return NextResponse.json({
-      plan,
+      plan: 'FREE',
       usage: {
-        analyze: { used: analyzeUsed, limit: limits.ANALYZE },
-        script: { used: scriptUsed, limit: limits.GENERATE_SCRIPT },
-        titles: { used: titleUsed, limit: limits.GENERATE_TITLES },
-        ideas: { used: ideaUsed, limit: limits.GENERATE_IDEAS },
+        analyze: { used, limit },
+        script: { used, limit },
+        titles: { used, limit },
+        ideas: { used, limit },
       },
-      recentContents,
+      recentContents: [],
     })
   } catch (error) {
-    return NextResponse.json({ error: '載入失敗' }, { status: 500 })
+    return NextResponse.json({ error: '伺服器錯誤' }, { status: 500 })
   }
 }
