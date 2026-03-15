@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useState, Suspense } from "react";
 import Link from "next/link";
 import { useSearchParams } from "next/navigation";
 import { supabase } from "@/lib/supabase";
@@ -10,7 +10,7 @@ import {
   validateStrongPassword,
 } from "@/lib/auth-messages";
 
-export default function RegisterPage() {
+function RegisterForm() {
   const searchParams = useSearchParams();
   const redirectTo = searchParams.get("redirect") || "/dashboard";
   const loginHref = `/login?redirect=${encodeURIComponent(redirectTo)}`;
@@ -231,5 +231,21 @@ export default function RegisterPage() {
         </p>
       </div>
     </main>
+  );
+}
+
+export default function RegisterPage() {
+  return (
+    <Suspense
+      fallback={
+        <main className="min-h-screen bg-black text-white flex items-center justify-center px-4">
+          <div className="w-full max-w-md rounded-2xl border border-white/10 bg-white/5 p-8 text-center">
+            <p className="text-white/60">載入中...</p>
+          </div>
+        </main>
+      }
+    >
+      <RegisterForm />
+    </Suspense>
   );
 }

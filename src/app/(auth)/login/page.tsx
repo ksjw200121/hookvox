@@ -1,13 +1,13 @@
 "use client";
 
-import { useState, useEffect } from "react";
+import { useState, Suspense } from "react";
 import Link from "next/link";
 import { supabase } from "@/lib/supabase";
 import AuthTurnstile from "@/components/auth/AuthTurnstile";
 import { translateSupabaseAuthError } from "@/lib/auth-messages";
 import { useSearchParams } from "next/navigation";
 
-export default function LoginPage() {
+function LoginForm() {
   const searchParams = useSearchParams();
   const redirectTo = searchParams.get("redirect") || "/dashboard";
 
@@ -130,5 +130,21 @@ export default function LoginPage() {
         </div>
       </div>
     </main>
+  );
+}
+
+export default function LoginPage() {
+  return (
+    <Suspense
+      fallback={
+        <main className="min-h-screen bg-black text-white flex items-center justify-center px-4">
+          <div className="w-full max-w-md rounded-2xl border border-white/10 bg-white/5 p-8 text-center">
+            <p className="text-white/60">載入中...</p>
+          </div>
+        </main>
+      }
+    >
+      <LoginForm />
+    </Suspense>
   );
 }
