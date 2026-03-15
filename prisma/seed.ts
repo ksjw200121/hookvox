@@ -94,34 +94,40 @@ async function main() {
     }
   })
 
-  // Create viral database entries
+  // Create viral database entries (ViralDatabase: userId, videoUrl, transcript, analysis)
   await prisma.viralDatabase.create({
     data: {
       userId: user.id,
-      url: 'https://www.instagram.com/reel/example123',
-      platform: Platform.INSTAGRAM,
-      caption: '很多人不知道，遺產稅最高要繳40%！你家的資產有保護好嗎？',
-      likes: 15420,
-      comments: 892,
-      views: 287000,
-      viralScore: 8.76,
-      category: '財務規劃',
-      keywords: ['遺產稅', '節稅', '財富傳承', '理財'],
+      videoUrl: 'https://www.instagram.com/reel/example123',
+      transcript: '很多人不知道，遺產稅最高要繳40%！你家的資產有保護好嗎？今天分享3個合法節稅方式。',
+      analysis: {
+        platform: 'INSTAGRAM',
+        caption: '很多人不知道，遺產稅最高要繳40%！你家的資產有保護好嗎？',
+        likes: 15420,
+        comments: 892,
+        views: 287000,
+        viralScore: 8.76,
+        category: '財務規劃',
+        keywords: ['遺產稅', '節稅', '財富傳承', '理財'],
+      },
     }
   })
 
   await prisma.viralDatabase.create({
     data: {
       userId: user.id,
-      url: 'https://www.tiktok.com/@example/video/123456',
-      platform: Platform.TIKTOK,
-      caption: '月薪3萬也能買房？分享我用這個方法3年存到頭期款的真實經歷',
-      likes: 28900,
-      comments: 1560,
-      views: 520000,
-      viralScore: 9.1,
-      category: '房地產',
-      keywords: ['買房', '存錢', '頭期款', '理財'],
+      videoUrl: 'https://www.tiktok.com/@example/video/123456',
+      transcript: '月薪3萬也能買房？分享我用這個方法3年存到頭期款的真實經歷。',
+      analysis: {
+        platform: 'TIKTOK',
+        caption: '月薪3萬也能買房？分享我用這個方法3年存到頭期款的真實經歷',
+        likes: 28900,
+        comments: 1560,
+        views: 520000,
+        viralScore: 9.1,
+        category: '房地產',
+        keywords: ['買房', '存錢', '頭期款', '理財'],
+      },
     }
   })
 
