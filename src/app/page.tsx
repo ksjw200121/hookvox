@@ -243,11 +243,8 @@ export default function HomePage() {
       <section className="py-20 px-6 bg-dark-800/50">
         <div className="max-w-5xl mx-auto text-center">
           <h2 className="text-4xl font-black mb-2">簡單透明的定價</h2>
-          <p className="text-white/40 mb-4">
-            月繳、季繳、半年、年繳都有，怎麼划算怎麼選
-          </p>
-          <p className="text-brand-400 text-sm font-medium mb-12">
-            🔥 早鳥優惠進行中，前 150 名享特別價
+          <p className="text-white/40 mb-12">
+            月繳、季繳、半年、年繳都有，詳細方案請至方案頁
           </p>
 
           <div className="grid md:grid-cols-3 gap-6">
@@ -258,7 +255,7 @@ export default function HomePage() {
                 period: "",
                 tag: "",
                 features: [
-                  "3 次體驗機會",
+                  "3 次分析 + 3 次生成",
                   "完整功能試用",
                   "腳本 + 標題 + 分鏡",
                   "不需信用卡",
@@ -267,33 +264,29 @@ export default function HomePage() {
                 highlight: false,
               },
               {
-                name: "基礎版",
-                price: "NT$490",
-                earlybird: true,
-                originalPrice: "NT$590",
+                name: "Creator",
+                price: "NT$699",
                 period: "/月",
                 tag: "最多人選",
                 features: [
-                  "60 次/月",
+                  "50 次分析 + 50 次生成 / 週期",
                   "腳本 + 標題 + 分鏡",
                   "爆款資料庫",
-                  "12 個行業專屬設定",
+                  "每支影片可生成 1 個延伸腳本",
                 ],
                 cta: "立即升級",
                 highlight: true,
               },
               {
                 name: "專業版",
-                price: "NT$990",
-                earlybird: true,
-                originalPrice: "NT$1,490",
+                price: "NT$1,599",
                 period: "/月",
                 tag: "重度使用者",
                 features: [
-                  "200 次/月",
+                  "200 次分析 + 200 次生成 / 週期",
                   "腳本 + 標題 + 分鏡",
                   "爆款資料庫",
-                  "優先客服支援",
+                  "每支影片可生成 3 個延伸腳本、一鍵複製標題",
                 ],
                 cta: "升級專業版",
                 highlight: false,
