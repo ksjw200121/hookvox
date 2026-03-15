@@ -215,7 +215,7 @@ export default function BillingPage() {
               <div className="rounded-xl bg-brand-500/10 border border-brand-500/20 p-3 text-sm">
                 <span className="text-white/60">本期到期日（下次續訂日）</span>
                 <span className="ml-2 font-semibold text-white">
-                  {formatDate(usage.cycleEnd || subscription?.endDate ?? null)}
+                  {formatDate(usage.cycleEnd ?? subscription?.endDate ?? null)}
                 </span>
               </div>
             )}
