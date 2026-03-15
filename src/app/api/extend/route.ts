@@ -11,8 +11,8 @@ import {
   assertRateLimit,
   recordEstimatedCost,
 } from "@/lib/security-guard";
-import { getIdeaExtensionPrompt } from "@/lib/prompts";
-import type { Industry } from "@/lib/prompts";
+import { getIdeaExtensionPrompt } from "@/prompts";
+import type { Industry } from "@/prompts";
 
 export const runtime = "nodejs";
 

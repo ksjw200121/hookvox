@@ -425,3 +425,55 @@ ${BRAND_STYLE}
 }
 `;
 }
+
+export function getIdeaExtensionPrompt(params: {
+  industry: Industry;
+  topic: string;
+  targetAudience?: string;
+  viralAnalysis: unknown;
+}): string {
+  const { industry, topic, targetAudience = "", viralAnalysis } = params;
+  const analysisStr =
+    typeof viralAnalysis === "string"
+      ? viralAnalysis
+      : JSON.stringify(viralAnalysis, null, 2);
+
+  return `
+${BRAND_STYLE}
+
+你是短影音企劃發想助手。
+
+任務：
+根據「爆款分析結果」與用戶主題，產出「延伸」的短影音點子（在同樣方向或同類型上做變化）。
+
+產業：${industry}
+主題：${topic}
+目標受眾：${targetAudience}
+
+以下是用戶的爆款分析結果（供你參考風格與方向）：
+---
+${analysisStr}
+---
+
+請生成 5～10 個延伸點子，每個點子都要能拍、能講、能吸引人。
+
+每個點子請包含：
+1. title：題目
+2. hook：開頭一句
+3. angle：切入角度
+4. whyItWorks：為什麼容易吸引人
+
+請只回傳合法 JSON，不要 markdown，不要多餘說明，直接從 { 開始。
+
+{
+  "extensions": [
+    {
+      "title": "點子1",
+      "hook": "開頭鉤子",
+      "angle": "切入角度",
+      "whyItWorks": "為什麼有效"
+    }
+  ]
+}
+`;
+}
