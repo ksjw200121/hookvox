@@ -1,138 +1,163 @@
-// prisma/schema.prisma
 generator client {
   provider = "prisma-client-js"
 }
 
 datasource db {
-  provider = "postgresql"
-  url      = env("DATABASE_URL")
+  provider  = "postgresql"
+  url       = env("DATABASE_URL")
+  directUrl = env("DIRECT_URL")
 }
 
 model User {
-  id            String    @id @default(cuid())
-  email         String    @unique
-  name          String?
-  avatarUrl     String?
-  supabaseId    String    @unique
-  createdAt     DateTime  @default(now())
-  updatedAt     DateTime  @updatedAt
-
-  subscription  Subscription?
-  contents      Content[]
-  scripts       Script[]
-  usageLogs     UsageLog[]
-  viralEntries  ViralDatabase[]
+  id           String        @id @default(cuid())
+  email        String        @unique
+  name         String?
+  avatarUrl    String?
+  supabaseId   String        @unique
+  createdAt    DateTime      @default(now())
+  updatedAt    DateTime      @updatedAt
+  role         String        @default("USER")
+  contents     Content[]
+  scripts      Script[]
+  subscription Subscription?
 
   @@map("users")
 }
 
 model Subscription {
-  id            String    @id @default(cuid())
-  userId        String    @unique
-  plan          Plan      @default(FREE)
-  status        SubStatus @default(ACTIVE)
-  tapPaySubId   String?
-  startDate     DateTime  @default(now())
-  endDate       DateTime?
-  createdAt     DateTime  @default(now())
-  updatedAt     DateTime  @updatedAt
-
-  user          User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  id                    String    @id @default(cuid())
+  userId                String    @unique
+  plan                  Plan      @default(FREE)
+  status                SubStatus @default(ACTIVE)
+  tapPaySubId           String?
+  ecpayTradeNo          String?
+  ecpayMerchantTradeNo  String?
+  startDate             DateTime  @default(now())
+  endDate               DateTime?
+  createdAt             DateTime  @default(now())
+  updatedAt             DateTime  @updatedAt
+  user                  User      @relation(fields: [userId], references: [id], onDelete: Cascade)
 
   @@map("subscriptions")
 }
 
 model Content {
-  id              String    @id @default(cuid())
-  userId          String
-  url             String
-  platform        Platform
-  caption         String?   @db.Text
-  likes           Int?
-  comments        Int?
-  views           Int?
-  rawData         Json?
-  createdAt       DateTime  @default(now())
-
-  user            User      @relation(fields: [userId], references: [id], onDelete: Cascade)
-  analysis        ContentAnalysis?
-  scripts         Script[]
+  id        String           @id @default(cuid())
+  userId    String
+  url       String
+  platform  Platform
+  caption   String?
+  likes     Int?
+  comments  Int?
+  views     Int?
+  rawData   Json?
+  createdAt DateTime         @default(now())
+  analysis  ContentAnalysis?
+  user      User             @relation(fields: [userId], references: [id], onDelete: Cascade)
+  scripts   Script[]
 
   @@map("contents")
 }
 
 model ContentAnalysis {
-  id                String    @id @default(cuid())
-  contentId         String    @unique
-  targetAudience    String?
-  viralReasons      Json?
-  hookType          String?
-  emotionType       String?
+  id                 String   @id @default(cuid())
+  contentId          String   @unique
+  targetAudience     String?
+  viralReasons       Json?
+  hookType           String?
+  emotionType        String?
   structureBreakdown Json?
-  painPoints        Json?
-  ctaType           String?
-  category          String?
-  hookStrength      Float?
-  topicRelevance    Float?
-  clarityScore      Float?
-  emotionalPull     Float?
-  ctaStrength       Float?
-  viralScore        Float?
-  createdAt         DateTime  @default(now())
-
-  content           Content   @relation(fields: [contentId], references: [id], onDelete: Cascade)
+  painPoints         Json?
+  ctaType            String?
+  category           String?
+  hookStrength       Float?
+  topicRelevance     Float?
+  clarityScore       Float?
+  emotionalPull      Float?
+  ctaStrength        Float?
+  viralScore         Float?
+  createdAt          DateTime @default(now())
+  content            Content  @relation(fields: [contentId], references: [id], onDelete: Cascade)
 
   @@map("content_analyses")
 }
 
 model Script {
-  id            String      @id @default(cuid())
-  userId        String
-  contentId     String?
-  topic         String
-  style         ScriptStyle
-  hook          String?     @db.Text
-  body          String?     @db.Text
-  caption       String?     @db.Text
-  cta           String?     @db.Text
-  shootingTips  String?     @db.Text
-  createdAt     DateTime    @default(now())
-
-  user          User        @relation(fields: [userId], references: [id], onDelete: Cascade)
-  content       Content?    @relation(fields: [contentId], references: [id])
+  id           String      @id @default(cuid())
+  userId       String
+  contentId    String?
+  topic        String
+  style        ScriptStyle
+  hook         String?
+  body         String?
+  caption      String?
+  cta          String?
+  shootingTips String?
+  createdAt    DateTime    @default(now())
+  content      Content?    @relation(fields: [contentId], references: [id])
+  user         User        @relation(fields: [userId], references: [id], onDelete: Cascade)
 
   @@map("scripts")
 }
 
 model UsageLog {
-  id            String      @id @default(cuid())
-  userId        String
-  action        UsageAction
-  date          DateTime    @default(now())
-  createdAt     DateTime    @default(now())
-
-  user          User        @relation(fields: [userId], references: [id], onDelete: Cascade)
+  id        String      @id @default(cuid())
+  userId    String
+  action    UsageAction
+  date      DateTime    @default(now())
+  createdAt DateTime    @default(now())
 
   @@map("usage_logs")
 }
 
 model ViralDatabase {
-  id            String    @id @default(cuid())
-  userId        String
-  url           String
-  platform      Platform
-  caption       String?   @db.Text
-  likes         Int?
-  comments      Int?
-  views         Int?
-  viralScore    Float?
-  category      String?
-  keywords      String[]
-  createdAt     DateTime  @default(now())
-
-  user          User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  id         String    @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  userId     String
+  videoUrl   String?
+  transcript String?
+  analysis   Json?
+  createdAt  DateTime? @default(now()) @db.Timestamptz(6)
+  isSaved    Boolean   @default(false)
+  savedAt    DateTime? @db.Timestamptz(6)
 
   @@map("viral_database")
+}
+
+model IpUsage {
+  id        String   @id @default(cuid())
+  ip        String
+  createdAt DateTime @default(now())
+
+  @@index([ip, createdAt])
+}
+
+model request_guards {
+  id           String   @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  key          String   @unique
+  user_id      String?
+  ip           String?
+  route        String
+  window_start DateTime @db.Timestamptz(6)
+  count        Int      @default(1)
+  created_at   DateTime @default(now()) @db.Timestamptz(6)
+  updated_at   DateTime @default(now()) @db.Timestamptz(6)
+
+  @@index([ip])
+  @@index([route])
+  @@index([user_id])
+}
+
+model system_runtime_metrics {
+  id                 String   @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  metric_date        DateTime @unique @db.Date
+  analyze_count      Int      @default(0)
+  generate_count     Int      @default(0)
+  estimated_cost_usd Decimal  @default(0) @db.Decimal(12, 4)
+  hard_locked        Boolean  @default(false)
+  created_at         DateTime @default(now()) @db.Timestamptz(6)
+  updated_at         DateTime @default(now()) @db.Timestamptz(6)
+
+  @@index([metric_date])
 }
 
 enum Platform {
@@ -145,6 +170,7 @@ enum Plan {
   FREE
   CREATOR
   PRO
+  FLAGSHIP
 }
 
 enum SubStatus {
@@ -169,10 +195,10 @@ enum UsageAction {
   GENERATE_IDEAS
 }
 
-model IpUsage {
+model SystemSettings {
   id        String   @id @default(cuid())
-  ip        String
+  key       String   @unique
+  value     String
   createdAt DateTime @default(now())
-
-  @@index([ip, createdAt])
+  updatedAt DateTime @updatedAt
 }

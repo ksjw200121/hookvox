@@ -1,0 +1,179 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider  = "postgresql"
+  url       = env("DATABASE_URL")
+  directUrl = env("DIRECT_URL")
+}
+
+model User {
+  id            String    @id @default(cuid())
+  email         String    @unique
+  name          String?
+  avatarUrl     String?
+  supabaseId    String    @unique
+  createdAt     DateTime  @default(now())
+  updatedAt     DateTime  @updatedAt
+
+  subscription  Subscription?
+  contents      Content[]
+  scripts       Script[]
+  usageLogs     UsageLog[]
+
+  @@map("users")
+}
+
+model Subscription {
+  id            String    @id @default(cuid())
+  userId        String    @unique
+  plan          Plan      @default(FREE)
+  status        SubStatus @default(ACTIVE)
+  tapPaySubId   String?
+  startDate     DateTime  @default(now())
+  endDate       DateTime?
+  createdAt     DateTime  @default(now())
+  updatedAt     DateTime  @updatedAt
+
+  user          User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@map("subscriptions")
+}
+
+model Content {
+  id              String    @id @default(cuid())
+  userId          String
+  url             String
+  platform        Platform
+  caption         String?   @db.Text
+  likes           Int?
+  comments        Int?
+  views           Int?
+  rawData         Json?
+  createdAt       DateTime  @default(now())
+
+  user            User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  analysis        ContentAnalysis?
+  scripts         Script[]
+
+  @@map("contents")
+}
+
+model ContentAnalysis {
+  id                 String    @id @default(cuid())
+  contentId          String    @unique
+  targetAudience     String?
+  viralReasons       Json?
+  hookType           String?
+  emotionType        String?
+  structureBreakdown Json?
+  painPoints         Json?
+  ctaType            String?
+  category           String?
+  hookStrength       Float?
+  topicRelevance     Float?
+  clarityScore       Float?
+  emotionalPull      Float?
+  ctaStrength        Float?
+  viralScore         Float?
+  createdAt          DateTime  @default(now())
+
+  content            Content   @relation(fields: [contentId], references: [id], onDelete: Cascade)
+
+  @@map("content_analyses")
+}
+
+model Script {
+  id            String      @id @default(cuid())
+  userId        String
+  contentId     String?
+  topic         String
+  style         ScriptStyle
+  hook          String?     @db.Text
+  body          String?     @db.Text
+  caption       String?     @db.Text
+  cta           String?     @db.Text
+  shootingTips  String?     @db.Text
+  createdAt     DateTime    @default(now())
+
+  user          User        @relation(fields: [userId], references: [id], onDelete: Cascade)
+  content       Content?    @relation(fields: [contentId], references: [id])
+
+  @@map("scripts")
+}
+
+model UsageLog {
+  id            String      @id @default(cuid())
+  userId        String
+  action        UsageAction
+  date          DateTime    @default(now())
+  createdAt     DateTime    @default(now())
+
+  user          User        @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@map("usage_logs")
+}
+
+model ViralDatabase {
+  id         String    @id @default(uuid()) @db.Uuid
+  userId     String
+  videoUrl   String?
+  transcript String?
+  analysis   Json?
+  isSaved    Boolean   @default(false)
+  savedAt    DateTime?
+  createdAt  DateTime  @default(now())
+
+  @@map("viral_database")
+}
+
+enum Platform {
+  INSTAGRAM
+  TIKTOK
+  YOUTUBE_SHORTS
+}
+
+enum Plan {
+  FREE
+  CREATOR
+  PRO
+}
+
+enum SubStatus {
+  ACTIVE
+  CANCELLED
+  EXPIRED
+}
+
+enum ScriptStyle {
+  EDUCATIONAL
+  CONTROVERSIAL
+  FEAR
+  STORY
+  CASUAL
+  EXPERT
+}
+
+enum UsageAction {
+  ANALYZE
+  GENERATE_SCRIPT
+  GENERATE_TITLES
+  GENERATE_IDEAS
+}
+
+model IpUsage {
+  id        String   @id @default(cuid())
+  ip        String
+  createdAt DateTime @default(now())
+
+  @@index([ip, createdAt])
+}
+
+model SystemSettings {
+  id        String   @id @default(cuid())
+  key       String   @unique
+  value     String
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+}

@@ -1,43 +1,63 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import Link from "next/link";
 import { supabase } from "@/lib/supabase";
+import AuthTurnstile from "@/components/auth/AuthTurnstile";
+import { translateSupabaseAuthError } from "@/lib/auth-messages";
+import { useSearchParams } from "next/navigation";
 
 export default function LoginPage() {
+  const searchParams = useSearchParams();
+  const redirectTo = searchParams.get("redirect") || "/dashboard";
+
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
+  const [captchaToken, setCaptchaToken] = useState("");
   const [loading, setLoading] = useState(false);
   const [message, setMessage] = useState("");
+  const [successMessage, setSuccessMessage] = useState("");
 
   const handleLogin = async (e: React.FormEvent) => {
     e.preventDefault();
     setLoading(true);
     setMessage("");
+    setSuccessMessage("");
 
-    const { error } = await supabase.auth.signInWithPassword({
-      email,
-      password,
-    });
-
-    if (error) {
-      setMessage(error.message);
+    if (!captchaToken) {
+      setMessage("請先完成真人驗證。");
       setLoading(false);
       return;
     }
 
-    setMessage("登入成功，正在跳轉...");
+    const { error } = await supabase.auth.signInWithPassword({
+      email,
+      password,
+      options: {
+        captchaToken,
+      },
+    });
+
+    if (error) {
+      setMessage(translateSupabaseAuthError(error.message));
+      setLoading(false);
+      return;
+    }
+
+    setSuccessMessage("登入成功，正在返回頁面...");
 
     setTimeout(() => {
-      window.location.href = "/dashboard";
+      window.location.href = redirectTo;
     }, 800);
   };
 
   return (
     <main className="min-h-screen bg-black text-white flex items-center justify-center px-4">
       <div className="w-full max-w-md rounded-2xl border border-white/10 bg-white/5 p-8 relative z-50">
-        <h1 className="text-3xl font-bold mb-2">登入帳號</h1>
-        <p className="text-white/60 mb-6">登入你的 Hookvox 帳號</p>
+        <h1 className="text-3xl font-bold mb-2">登入 Hookvox</h1>
+        <p className="text-white/60 mb-6">
+          登入你的 Hookvox 帳號，開始分析爆款內容與生成腳本。
+        </p>
 
         <form onSubmit={handleLogin} className="space-y-4 w-full relative z-50">
           <div className="w-full">
@@ -47,7 +67,7 @@ export default function LoginPage() {
               className="block w-full rounded-lg bg-white/10 border border-white/10 px-4 py-3 outline-none"
               value={email}
               onChange={(e) => setEmail(e.target.value)}
-              placeholder="請輸入 Email"
+              placeholder="請輸入你的 Email"
               required
             />
           </div>
@@ -64,24 +84,50 @@ export default function LoginPage() {
             />
           </div>
 
+          <AuthTurnstile
+            onVerify={(token) => setCaptchaToken(token)}
+            onExpire={() => setCaptchaToken("")}
+            onError={() => {
+              setCaptchaToken("");
+              setMessage("真人驗證失敗，請重新驗證。");
+            }}
+          />
+
           <button
             type="submit"
             disabled={loading}
             className="block w-full rounded-lg bg-red-500 hover:bg-red-600 px-4 py-3 font-semibold text-white disabled:opacity-50 cursor-pointer relative z-50"
-            style={{ pointerEvents: "auto" }}
           >
             {loading ? "登入中..." : "立即登入"}
           </button>
         </form>
 
-        {message ? <p className="mt-4 text-sm text-red-300">{message}</p> : null}
+        {message && <p className="mt-4 text-sm text-red-300">{message}</p>}
+        {successMessage && (
+          <p className="mt-4 text-sm text-emerald-300">{successMessage}</p>
+        )}
 
-        <p className="mt-6 text-center text-sm text-white/50">
-          還沒有帳號？{" "}
-          <Link href="/register" className="text-red-400 hover:text-red-300 underline">
-            點此註冊
-          </Link>
-        </p>
+        <div className="mt-6 space-y-3 text-center text-sm">
+          <p className="text-white/50">
+            忘記密碼？{" "}
+            <Link
+              href="/forgot-password"
+              className="text-red-400 hover:text-red-300 underline"
+            >
+              點此重設
+            </Link>
+          </p>
+
+          <p className="text-white/50">
+            還沒有帳號？{" "}
+            <Link
+              href="/register"
+              className="text-red-400 hover:text-red-300 underline"
+            >
+              立即註冊 Hookvox
+            </Link>
+          </p>
+        </div>
       </div>
     </main>
   );

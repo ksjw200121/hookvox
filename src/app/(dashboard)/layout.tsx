@@ -1,5 +1,7 @@
 "use client";
+
 import Link from "next/link";
+import { useEffect, useState } from "react";
 import { usePathname } from "next/navigation";
 import { supabase } from "@/lib/supabase";
 
@@ -9,6 +11,32 @@ export default function DashboardLayout({
   children: React.ReactNode;
 }) {
   const pathname = usePathname();
+  const [isGuest, setIsGuest] = useState(true);
+  const [checkingSession, setCheckingSession] = useState(true);
+
+  useEffect(() => {
+    async function loadSession() {
+      const {
+        data: { session },
+      } = await supabase.auth.getSession();
+
+      setIsGuest(!session?.access_token);
+      setCheckingSession(false);
+    }
+
+    loadSession();
+
+    const {
+      data: { subscription },
+    } = supabase.auth.onAuthStateChange((_event, session) => {
+      setIsGuest(!session?.access_token);
+      setCheckingSession(false);
+    });
+
+    return () => {
+      subscription.unsubscribe();
+    };
+  }, []);
 
   const handleLogout = async () => {
     await supabase.auth.signOut();
@@ -23,15 +51,22 @@ export default function DashboardLayout({
     { href: "/billing", label: "帳單" },
   ];
 
+  const safePathname = pathname || "/dashboard";
+  const loginHref = `/login?redirect=${encodeURIComponent(safePathname)}`;
+  const registerHref = `/register?redirect=${encodeURIComponent(safePathname)}`;
+
   return (
     <div className="min-h-screen bg-black text-white flex flex-col">
       <header className="border-b border-white/10 bg-black/80 backdrop-blur sticky top-0 z-40">
         <div className="mx-auto flex max-w-7xl items-center justify-between px-6 py-4">
           <Link href="/dashboard" className="flex flex-col leading-tight">
             <span className="text-2xl font-bold tracking-tight">Hookvox</span>
-            <span className="text-xs text-white/40 font-normal">爆款腳本生成器</span>
+            <span className="text-xs text-white/40 font-normal">
+              爆款腳本生成器
+            </span>
           </Link>
-          <nav className="hidden gap-6 md:flex">
+
+          <nav className="hidden gap-6 md:flex items-center">
             {navItems.map((item) => {
               const active = pathname === item.href;
               return (
@@ -47,24 +82,61 @@ export default function DashboardLayout({
               );
             })}
           </nav>
-          <button
-            onClick={handleLogout}
-            className="rounded-lg bg-red-500 px-4 py-2 text-sm font-semibold text-white hover:bg-red-600"
-          >
-            登出
-          </button>
+
+          <div className="flex items-center gap-3">
+            {checkingSession ? null : isGuest ? (
+              <>
+                <Link
+                  href={loginHref}
+                  className="rounded-lg border border-white/10 bg-white/5 px-4 py-2 text-sm font-semibold text-white hover:bg-white/10"
+                >
+                  登入
+                </Link>
+                <Link
+                  href={registerHref}
+                  className="rounded-lg bg-red-500 px-4 py-2 text-sm font-semibold text-white hover:bg-red-600"
+                >
+                  註冊
+                </Link>
+              </>
+            ) : (
+              <button
+                onClick={handleLogout}
+                className="rounded-lg bg-red-500 px-4 py-2 text-sm font-semibold text-white hover:bg-red-600"
+              >
+                登出
+              </button>
+            )}
+          </div>
         </div>
       </header>
 
-      <main className="mx-auto max-w-7xl w-full px-6 py-8 flex-1">{children}</main>
+      <main className="mx-auto max-w-7xl w-full px-6 py-8 flex-1">
+        {children}
+      </main>
 
       <footer className="border-t border-white/10 py-6 mt-auto">
         <div className="mx-auto max-w-7xl px-6 flex flex-col md:flex-row items-center justify-between gap-3 text-xs text-white/30">
           <span>© 2026 Hookvox — by 金孫</span>
           <div className="flex gap-4">
-            <Link href="/terms" className="hover:text-white/60 transition-colors">服務條款</Link>
-            <Link href="/privacy" className="hover:text-white/60 transition-colors">隱私權政策</Link>
-            <a href="mailto:support@hookvox.ai" className="hover:text-white/60 transition-colors">聯繫客服</a>
+            <Link href="/terms" className="hover:text-white/60 transition-colors">
+              服務條款
+            </Link>
+            <Link
+              href="/privacy"
+              className="hover:text-white/60 transition-colors"
+            >
+              隱私權政策
+            </Link>
+            <Link href="/refund" className="hover:text-white/60 transition-colors">
+              退款政策
+            </Link>
+            <a
+              href="mailto:hookvox.support@gmail.com"
+              className="hover:text-white/60 transition-colors"
+            >
+              聯繫客服
+            </a>
           </div>
         </div>
       </footer>

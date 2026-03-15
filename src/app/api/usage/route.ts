@@ -1,48 +1,56 @@
-// src/app/api/usage/route.ts
-import { NextRequest, NextResponse } from 'next/server'
-import { createClient } from '@supabase/supabase-js'
+import { NextResponse } from "next/server";
+import {
+  getUserIdFromRequest,
+  checkUsageLimit,
+  getWeekUsage,
+} from "@/lib/usage-checker";
 
-function getSupabaseAdmin() {
-  return createClient(
-    process.env.NEXT_PUBLIC_SUPABASE_URL!,
-    process.env.SUPABASE_SERVICE_ROLE_KEY!
-  )
-}
+export const runtime = "nodejs";
 
-export async function GET(req: NextRequest) {
+export async function GET(req: Request) {
   try {
-    const authHeader = req.headers.get('Authorization')
-    if (!authHeader?.startsWith('Bearer ')) {
-      return NextResponse.json({ error: '未登入' }, { status: 401 })
+    const userId = await getUserIdFromRequest(req);
+
+    if (!userId) {
+      return NextResponse.json({ error: "未登入" }, { status: 401 });
     }
-    const token = authHeader.replace('Bearer ', '').trim()
-    const supabaseAdmin = getSupabaseAdmin()
-    const { data: { user }, error } = await supabaseAdmin.auth.getUser(token)
-    if (error || !user) return NextResponse.json({ error: '未登入' }, { status: 401 })
 
-    const now = new Date()
-    const startOfMonth = new Date(now.getFullYear(), now.getMonth(), 1).toISOString()
-
-    const { count } = await supabaseAdmin
-      .from('usage_logs')
-      .select('*', { count: 'exact', head: true })
-      .eq('userId', user.id)
-      .gte('createdAt', startOfMonth)
-
-    const used = count ?? 0
-    const limit = 3
+    const [analyzeUsage, generateUsage, weekUsage] = await Promise.all([
+      checkUsageLimit(userId, "ANALYZE"),
+      checkUsageLimit(userId, "GENERATE"),
+      getWeekUsage(userId),
+    ]);
 
     return NextResponse.json({
-      plan: 'FREE',
+      plan: analyzeUsage.plan,
       usage: {
-        analyze: { used, limit },
-        script: { used, limit },
-        titles: { used, limit },
-        ideas: { used, limit },
+        analyze: {
+          used: analyzeUsage.used,
+          limit: analyzeUsage.limit,
+          remaining: analyzeUsage.remaining,
+          cycleStart: analyzeUsage.cycleStart,
+          cycleEnd: analyzeUsage.cycleEnd,
+        },
+        generate: {
+          used: generateUsage.used,
+          limit: generateUsage.limit,
+          remaining: generateUsage.remaining,
+          cycleStart: generateUsage.cycleStart,
+          cycleEnd: generateUsage.cycleEnd,
+        },
+        week: {
+          analyze: weekUsage.analyze,
+          generate: weekUsage.generate,
+        },
       },
-      recentContents: [],
-    })
-  } catch (error) {
-    return NextResponse.json({ error: '伺服器錯誤' }, { status: 500 })
+    });
+  } catch (error: unknown) {
+    const err = error as Error;
+    console.error("usage api error:", err);
+
+    return NextResponse.json(
+      { error: err?.message || "伺服器錯誤" },
+      { status: 500 }
+    );
   }
 }

@@ -1,12 +1,137 @@
+import { isAiEnabled } from "@/lib/ai-switch";
 import { NextResponse } from "next/server";
 import Anthropic from "@anthropic-ai/sdk";
-import { getUserIdFromRequest, checkUsageLimit, logUsage } from "@/lib/usage-checker";
+import { prisma } from "@/lib/prisma";
+import {
+  getUserIdFromRequest,
+  checkUsageLimit,
+  logUsage,
+} from "@/lib/usage-checker";
+import {
+  assertCostGuard,
+  assertRateLimit,
+  getGenerateRateLimit,
+  recordEstimatedCost,
+} from "@/lib/security-guard";
 
 export const runtime = "nodejs";
 
 const anthropic = new Anthropic({ apiKey: process.env.ANTHROPIC_API_KEY });
 
-function extractTextFromClaude(content: Anthropic.Messages.Message["content"]): string {
+const SCRIPT_SYSTEM_PROMPT = `你是一位專業的爆款短影音腳本生成師，熟悉 IG Reels / TikTok / YouTube Shorts 演算法，擅長根據爆款公式生成高轉換率腳本。
+
+【與 IG 爆款結構對齊】
+- 前 3 秒決定是否被滑走：hook 必須是「衝突／痛點／數字／問句／反差」之一，讓人無法滑走。
+- 結構建議：鉤子(0–3秒) → 共鳴/痛點(讓觀眾覺得「這在說我」) → 解方/乾貨(具體、可操作) → 舉例或情境(具象化) → CTA(具體行動)。
+- 衝突前置、價值後置：開頭先製造懸念或痛點，再給解方，不要先講背景再進主題。
+- 口語、短句、像真人對鏡頭講話；禁止「今天來跟大家分享」「你一定要知道」「非常重要」「讓我們一起了解」等 AI 腔。
+
+你的任務：
+1. 根據分析結果，提取爆款公式的核心元素
+2. 生成 8 個吸引點擊的標題（句型多元：數字、問句、反差、利益型等）
+3. 生成 3 份不同風格的完整腳本（A / B / C）
+4. 如果需要分鏡，請從 A / B / C 中選出最適合拍攝的一個版本，填入 bestScriptVersion，並且只幫那一個版本生成完整分鏡 scenes
+5. 其他沒有被選中的版本，scenes 一律回傳空陣列 []
+
+重要規則：
+- 三份腳本都要完整寫出來，不能偷懶
+- 三份腳本要有明顯差異，例如：對話/演戲型、數字衝擊型、身份認同型（或情緒型、故事型、直球型）
+- 每份腳本都要有 hook、fullScript、cta；fullScript 要能直接對著鏡頭念，每句不要太長
+- 只有最佳版本才有 scenes
+- 如果本次不需要分鏡：
+  - bestScriptVersion 請填空字串 ""
+  - 三份 scripts 的 scenes 都回傳 []
+
+分鏡格式要求（只有被選中的最佳版本需要）：
+- 每個分鏡包含：時間點、畫面描述、旁白/字幕
+- 前 3 秒必須是強力鉤子（痛點或衝突或數字問句）
+- 中段有轉折/衝突/乾貨，節奏緊湊
+- 結尾有明確 CTA
+- 建議 5 個分鏡，適合 60 秒內短影音拍攝
+
+回傳純 JSON，不要有任何額外文字：
+{
+  "titles": [
+    "標題1",
+    "標題2",
+    "標題3",
+    "標題4",
+    "標題5",
+    "標題6",
+    "標題7",
+    "標題8"
+  ],
+  "bestScriptVersion": "A",
+  "scripts": [
+    {
+      "version": "A",
+      "hook": "開場鉤子文案（前3秒，讓人無法滑走）",
+      "scenes": [
+        {
+          "id": 1,
+          "timeRange": "0-3秒",
+          "visual": "畫面描述（做什麼動作、展示什麼）",
+          "voiceover": "旁白或字幕文字",
+          "purpose": "鉤子"
+        },
+        {
+          "id": 2,
+          "timeRange": "3-15秒",
+          "visual": "畫面描述",
+          "voiceover": "旁白或字幕文字",
+          "purpose": "建立共鳴/痛點"
+        },
+        {
+          "id": 3,
+          "timeRange": "15-40秒",
+          "visual": "畫面描述",
+          "voiceover": "旁白或字幕文字",
+          "purpose": "核心內容/乾貨"
+        },
+        {
+          "id": 4,
+          "timeRange": "40-55秒",
+          "visual": "畫面描述",
+          "voiceover": "旁白或字幕文字",
+          "purpose": "高潮/轉折"
+        },
+        {
+          "id": 5,
+          "timeRange": "55-60秒",
+          "visual": "畫面描述",
+          "voiceover": "旁白或字幕文字",
+          "purpose": "CTA"
+        }
+      ],
+      "fullScript": "完整連貫的腳本文字（可直接對著鏡頭念）",
+      "cta": "結尾行動呼籲文案"
+    },
+    {
+      "version": "B",
+      "hook": "開場鉤子文案（前3秒，讓人無法滑走）",
+      "scenes": [],
+      "fullScript": "完整連貫的腳本文字（可直接對著鏡頭念）",
+      "cta": "結尾行動呼籲文案"
+    },
+    {
+      "version": "C",
+      "hook": "開場鉤子文案（前3秒，讓人無法滑走）",
+      "scenes": [],
+      "fullScript": "完整連貫的腳本文字（可直接對著鏡頭念）",
+      "cta": "結尾行動呼籲文案"
+    }
+  ],
+  "adaptedVersion": {
+    "enabled": false,
+    "topic": "",
+    "hook": "",
+    "fullScript": ""
+  }
+}`;
+
+function extractTextFromClaude(
+  content: Anthropic.Messages.Message["content"]
+): string {
   return content
     .filter((block) => block.type === "text")
     .map((block) => (block as Anthropic.Messages.TextBlock).text)
@@ -14,87 +139,362 @@ function extractTextFromClaude(content: Anthropic.Messages.Message["content"]): 
 }
 
 function safeParseJson(raw: string) {
-  try { return JSON.parse(raw.trim()); } catch {}
+  try {
+    return JSON.parse(raw.trim());
+  } catch {}
+
   const start = raw.indexOf("{");
   const end = raw.lastIndexOf("}");
+
   if (start !== -1 && end !== -1 && end > start) {
-    try { return JSON.parse(raw.slice(start, end + 1)); } catch {}
+    try {
+      return JSON.parse(raw.slice(start, end + 1));
+    } catch {}
   }
-  const cleaned = raw.replace(/^```json\s*/i, "").replace(/^```\s*/i, "").replace(/\s*```$/i, "").trim();
+
+  const cleaned = raw
+    .replace(/^```json\s*/i, "")
+    .replace(/^```\s*/i, "")
+    .replace(/\s*```$/i, "")
+    .trim();
+
   return JSON.parse(cleaned);
 }
 
+function normalizeAnalysis(input: unknown): Record<string, any> {
+  if (!input || typeof input !== "object" || Array.isArray(input)) {
+    return {};
+  }
+  return input as Record<string, any>;
+}
+
+function getGeneratedPayload(analysis: Record<string, any>) {
+  const generated =
+    analysis?.generated &&
+    typeof analysis.generated === "object" &&
+    !Array.isArray(analysis.generated)
+      ? analysis.generated
+      : {};
+
+  return {
+    titles: Array.isArray(generated?.titles) ? generated.titles : [],
+    bestScriptVersion:
+      typeof generated?.bestScriptVersion === "string"
+        ? generated.bestScriptVersion
+        : "",
+    scripts: Array.isArray(generated?.scripts) ? generated.scripts : [],
+    storyboard: Array.isArray(generated?.storyboard)
+      ? generated.storyboard
+      : [],
+    adaptedVersion:
+      generated?.adaptedVersion &&
+      typeof generated.adaptedVersion === "object" &&
+      !Array.isArray(generated.adaptedVersion)
+        ? generated.adaptedVersion
+        : {
+            enabled: false,
+            topic: "",
+            hook: "",
+            fullScript: "",
+          },
+  };
+}
+
+function buildStoryboardFromScripts(
+  scripts: any[],
+  bestScriptVersion: string
+): any[] {
+  if (!Array.isArray(scripts) || scripts.length === 0) return [];
+
+  const best =
+    scripts.find((script) => script?.version === bestScriptVersion) || scripts[0];
+
+  return Array.isArray(best?.scenes) ? best.scenes : [];
+}
+
+async function findExistingViralEntry(userId: string, url?: string, transcript?: string) {
+  if (url) {
+    const byUrl = await prisma.viralDatabase.findFirst({
+      where: {
+        userId,
+        videoUrl: url,
+      },
+      orderBy: {
+        createdAt: "desc",
+      },
+    });
+
+    if (byUrl) return byUrl;
+  }
+
+  if (transcript) {
+    const byTranscript = await prisma.viralDatabase.findFirst({
+      where: {
+        userId,
+        transcript,
+      },
+      orderBy: {
+        createdAt: "desc",
+      },
+    });
+
+    if (byTranscript) return byTranscript;
+  }
+
+  return null;
+}
+
 export async function POST(req: Request) {
+
+  if (!(await isAiEnabled())) {
+    return NextResponse.json(
+      { error: "AI 系統暫時關閉" },
+      { status: 503 }
+    );
+  }
   try {
     const userId = await getUserIdFromRequest(req);
+
     if (!userId) {
       return NextResponse.json({ error: "未登入" }, { status: 401 });
     }
 
-    const usage = await checkUsageLimit(userId);
-    if (!usage.allowed) {
-      return NextResponse.json({
-        error: `本月免費次數已達上限 ${usage.limit} 次，已使用 ${usage.used} 次，請升級 Pro 繼續使用`,
-        limitReached: true,
-        upgradeRequired: true,
-        used: usage.used,
-        limit: usage.limit,
-      }, { status: 403 });
+    const rate = await assertRateLimit({
+      req,
+      userId,
+      routeKey: "generate",
+      limit: getGenerateRateLimit(),
+      windowMinutes: 1,
+    });
+
+    if (!rate.allowed) {
+      return NextResponse.json(
+        { error: "操作太頻繁，請稍後再試" },
+        { status: 429 }
+      );
     }
-    const publicUserId = (usage as any).publicUserId ?? userId;
+
+    const costGuard = await assertCostGuard("GENERATE_SCRIPT");
+    if (!costGuard.allowed) {
+      return NextResponse.json(
+        {
+          error: "系統今日 AI 成本保護已啟動，請稍後再試",
+          code: costGuard.message,
+        },
+        { status: 503 }
+      );
+    }
 
     const body = await req.json();
-    const { analysis, transcript, userTopic } = body;
+    const {
+      url,
+      industry,
+      topic,
+      targetAudience,
+      ctaGoal,
+      analysis,
+      substitution,
+      wantStoryboard,
+      transcript,
+      userTopic,
+    } = body || {};
 
-    if (!analysis) return NextResponse.json({ error: "缺少分析資料" }, { status: 400 });
+    if (!analysis || !String(JSON.stringify(analysis)).trim()) {
+      return NextResponse.json({ error: "缺少分析資料" }, { status: 400 });
+    }
 
-    const prompt = `你是爆款腳本生成專家。根據以下分析結果，為用戶生成腳本和標題。
+    if (!process.env.ANTHROPIC_API_KEY) {
+      return NextResponse.json(
+        { error: "ANTHROPIC_API_KEY 未設定" },
+        { status: 500 }
+      );
+    }
 
-分析結果：
-${JSON.stringify(analysis, null, 2)}
+    const existingEntry = await findExistingViralEntry(
+      userId,
+      typeof url === "string" ? url.trim() : "",
+      typeof transcript === "string" ? transcript.trim() : ""
+    );
 
-${transcript ? `原始逐字稿：\n${transcript}\n` : ""}
-${userTopic ? `用戶主題：${userTopic}` : ""}
+    const existingAnalysis = existingEntry?.analysis
+      ? normalizeAnalysis(existingEntry.analysis)
+      : normalizeAnalysis(analysis);
 
-請生成：
-1. 3個爆款標題（吸引點擊）
-2. 一份完整腳本（包含開場、主體、結尾CTA）
+    const cachedGenerated = getGeneratedPayload(existingAnalysis);
 
-回傳純 JSON：
-{
-  "titles": ["標題1", "標題2", "標題3"],
-  "script": {
-    "hook": "開場鉤子（前3秒）",
-    "body": "主體內容（分段）",
-    "cta": "結尾行動呼籲"
-  }
-}`;
+    if (
+      cachedGenerated.titles.length > 0 &&
+      cachedGenerated.scripts.length > 0
+    ) {
+      return NextResponse.json({
+        success: true,
+        cached: true,
+        titles: cachedGenerated.titles,
+        bestScriptVersion: cachedGenerated.bestScriptVersion,
+        scripts: cachedGenerated.scripts,
+        storyboard: cachedGenerated.storyboard,
+        adaptedVersion: cachedGenerated.adaptedVersion,
+      });
+    }
+
+    const usage = await checkUsageLimit(userId, "GENERATE");
+
+    if (!usage.allowed) {
+      return NextResponse.json(
+        {
+          error: `本月生成次數已達上限 ${usage.limit} 次，已使用 ${usage.used} 次，請升級方案繼續使用`,
+          limitReached: true,
+          upgradeRequired: true,
+          used: usage.used,
+          limit: usage.limit,
+          remaining: usage.remaining,
+        },
+        { status: 403 }
+      );
+    }
+
+    const publicUserId = usage.publicUserId ?? userId;
+    const finalTopic = userTopic || substitution || topic || "";
+    const storyboardRequired = Boolean(wantStoryboard);
+
+    const userPrompt = `請根據以下爆款影片分析，生成腳本和標題。
+
+## 行業
+${industry || "GENERAL"}
+
+## 爆款分析結果
+${JSON.stringify(existingAnalysis, null, 2)}
+
+## 原始逐字稿
+${transcript ? String(transcript).slice(0, 3000) : "（無）"}
+
+## 用戶主題
+${finalTopic || "（無，請直接沿用原影片邏輯）"}
+
+## 目標受眾
+${targetAudience || "（未提供）"}
+
+## CTA 目標
+${ctaGoal || "（未提供）"}
+
+## 是否需要分鏡
+${
+  storyboardRequired
+    ? "需要。請在 A/B/C 三份腳本中自行選出最適合的一份作為 bestScriptVersion，並且只有那一份要生成完整 scenes。"
+    : "不需要。bestScriptVersion 請填空字串，三份 scripts 的 scenes 全部回傳空陣列。"
+}
+
+## 套用主題規則
+${
+  finalTopic
+    ? `請把內容套用到「${finalTopic}」這個主題。adaptedVersion.enabled 設為 true，並填入對應內容。`
+    : "adaptedVersion.enabled 保持 false。"
+}
+
+請嚴格按照 system prompt 的 JSON 格式回傳。`;
 
     const response = await anthropic.messages.create({
       model: "claude-haiku-4-5-20251001",
-      max_tokens: 2000,
-      messages: [{ role: "user", content: prompt }],
+      max_tokens: 6000,
+      system: [
+        {
+          type: "text",
+          text: SCRIPT_SYSTEM_PROMPT,
+          cache_control: { type: "ephemeral" },
+        },
+      ],
+      messages: [{ role: "user", content: userPrompt }],
     });
 
     const text = extractTextFromClaude(response.content);
-    let result: Record<string, unknown>;
+
+    let result: Record<string, any>;
     try {
       result = safeParseJson(text);
     } catch {
-      return NextResponse.json({ error: "Claude 回傳格式不是 JSON", raw: text }, { status: 500 });
+      return NextResponse.json(
+        { error: "Claude 回傳格式不是 JSON", raw: text },
+        { status: 500 }
+      );
+    }
+
+    const titles = Array.isArray(result?.titles) ? result.titles : [];
+    const scripts = Array.isArray(result?.scripts) ? result.scripts : [];
+    const bestScriptVersion =
+      typeof result?.bestScriptVersion === "string"
+        ? result.bestScriptVersion
+        : "";
+    const storyboard = buildStoryboardFromScripts(scripts, bestScriptVersion);
+    const adaptedVersion =
+      result?.adaptedVersion &&
+      typeof result.adaptedVersion === "object" &&
+      !Array.isArray(result.adaptedVersion)
+        ? result.adaptedVersion
+        : {
+            enabled: false,
+            topic: "",
+            hook: "",
+            fullScript: "",
+          };
+
+    if (titles.length === 0 || scripts.length === 0) {
+      return NextResponse.json(
+        { error: "生成失敗，AI 未回傳完整內容" },
+        { status: 500 }
+      );
+    }
+
+    if (existingEntry) {
+      const now = new Date().toISOString();
+
+      const nextAnalysis = {
+        ...existingAnalysis,
+        generated: {
+          ...(existingAnalysis.generated || {}),
+          titles,
+          bestScriptVersion,
+          scripts,
+          storyboard,
+          adaptedVersion,
+          generatedAt: existingAnalysis.generated?.generatedAt || now,
+          updatedAt: now,
+        },
+      };
+
+      await prisma.viralDatabase.update({
+        where: {
+          id: existingEntry.id,
+        },
+        data: {
+          analysis: nextAnalysis,
+        },
+      });
     }
 
     await logUsage(publicUserId, "GENERATE_SCRIPT");
+    await recordEstimatedCost("GENERATE_SCRIPT");
 
     return NextResponse.json({
       success: true,
-      ...result,
-      usage: { used: null, limit: 3, isPro: (usage as any).isPro },
+      cached: false,
+      titles,
+      bestScriptVersion,
+      scripts,
+      storyboard,
+      adaptedVersion,
+      usage: {
+        used: usage.used + 1,
+        limit: usage.limit,
+        remaining: Math.max(usage.limit - (usage.used + 1), 0),
+      },
     });
-
   } catch (error: unknown) {
     const err = error as Error;
     console.error("generate error:", err);
-    return NextResponse.json({ error: err?.message || "伺服器錯誤" }, { status: 500 });
+
+    return NextResponse.json(
+      { error: err?.message || "伺服器錯誤" },
+      { status: 500 }
+    );
   }
 }

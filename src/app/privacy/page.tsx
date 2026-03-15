@@ -76,7 +76,7 @@ export default function PrivacyPage() {
 • 請求刪除您的帳號與相關資料
 • 請求停止蒐集、處理或利用您的個人資料
 
-如需行使上述權利，請聯絡 support@hookvox.ai，我們將於 15 個工作天內回覆。`,
+如需行使上述權利，請聯絡 hookvox.support@gmail.com，我們將於 15 個工作天內回覆。`,
           },
           {
             title: '7. 資料保留期限',
@@ -95,7 +95,7 @@ export default function PrivacyPage() {
           },
           {
             title: '10. 聯絡我們',
-            content: `隱私相關問題請聯絡：support@hookvox.ai`,
+            content: `隱私相關問題請聯絡：hookvox.support@gmail.com`,
           },
         ].map(section => (
           <section key={section.title}>

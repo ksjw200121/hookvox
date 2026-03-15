@@ -1,7 +1,49 @@
-// src/lib/usage-checker.ts
+import crypto from "crypto";
 import { createClient } from "@supabase/supabase-js";
 
-const FREE_MONTHLY_LIMIT = 3;
+export type PlanName = "FREE" | "CREATOR" | "PRO" | "FLAGSHIP";
+export type UsageFeature = "ANALYZE" | "GENERATE";
+export type UsageAction =
+  | "ANALYZE"
+  | "GENERATE_SCRIPT"
+  | "GENERATE_TITLES"
+  | "GENERATE_IDEAS";
+
+const LIMITS: Record<PlanName, Record<UsageFeature, number>> = {
+  FREE: {
+    ANALYZE: 3,
+    GENERATE: 3,
+  },
+  CREATOR: {
+    ANALYZE: 50,
+    GENERATE: 50,
+  },
+  PRO: {
+    ANALYZE: 200,
+    GENERATE: 200,
+  },
+  FLAGSHIP: {
+    ANALYZE: 500,
+    GENERATE: 500,
+  },
+};
+
+type UserRow = {
+  id: string;
+  email?: string | null;
+  name?: string | null;
+  avatarUrl?: string | null;
+  supabaseId: string;
+};
+
+type SubscriptionRow = {
+  id: string;
+  userId: string;
+  plan: PlanName;
+  status: string;
+  startDate?: string | null;
+  endDate?: string | null;
+};
 
 function getSupabaseAdmin() {
   return createClient(
@@ -10,54 +52,392 @@ function getSupabaseAdmin() {
   );
 }
 
-export async function getUserIdFromRequest(req: Request): Promise<string | null> {
-  const authHeader = req.headers.get("Authorization");
-  if (!authHeader?.startsWith("Bearer ")) return null;
-  const token = authHeader.replace("Bearer ", "").trim();
-  const supabaseAdmin = getSupabaseAdmin();
-  const { data, error } = await supabaseAdmin.auth.getUser(token);
-  if (error || !data?.user) return null;
-  return data.user.id; // supabaseId
+function addOneMonth(date: Date): Date {
+  const next = new Date(date);
+  next.setMonth(next.getMonth() + 1);
+  return next;
 }
 
-export async function checkUsageLimit(supabaseId: string): Promise<
-  | { allowed: true; isPro: boolean; publicUserId: string }
-  | { allowed: false; message: string; used: number; limit: number }
-> {
+function getCurrentCycleWindow(anchorInput?: string | null): {
+  cycleStart: string;
+  cycleEnd: string;
+} {
+  const now = new Date();
+  let cycleStart = anchorInput ? new Date(anchorInput) : new Date();
+
+  if (Number.isNaN(cycleStart.getTime())) {
+    cycleStart = new Date();
+  }
+
+  let cycleEnd = addOneMonth(cycleStart);
+
+  while (now >= cycleEnd) {
+    cycleStart = cycleEnd;
+    cycleEnd = addOneMonth(cycleStart);
+  }
+
+  return {
+    cycleStart: cycleStart.toISOString(),
+    cycleEnd: cycleEnd.toISOString(),
+  };
+}
+
+export async function getUserIdFromRequest(
+  req: Request
+): Promise<string | null> {
+  const authHeader = req.headers.get("Authorization");
+
+  if (!authHeader?.startsWith("Bearer ")) {
+    return null;
+  }
+
+  const token = authHeader.replace("Bearer ", "").trim();
+
+  if (!token) {
+    return null;
+  }
+
+  const supabaseAdmin = getSupabaseAdmin();
+  const { data, error } = await supabaseAdmin.auth.getUser(token);
+
+  if (error || !data?.user) {
+    return null;
+  }
+
+  return data.user.id;
+}
+
+async function getAuthUserFromSupabaseId(supabaseId: string) {
   const supabaseAdmin = getSupabaseAdmin();
 
-  // 查本月使用次數（直接用 supabaseId）
+  const { data, error } = await supabaseAdmin.auth.admin.getUserById(supabaseId);
+
+  if (error || !data?.user) {
+    return null;
+  }
+
+  return data.user;
+}
+
+async function ensurePublicUserBySupabaseId(
+  supabaseId: string
+): Promise<UserRow | null> {
+  const supabaseAdmin = getSupabaseAdmin();
+
+  const { data: existingUser, error: selectError } = await supabaseAdmin
+    .from("users")
+    .select("id, email, name, avatarUrl, supabaseId")
+    .eq("supabaseId", supabaseId)
+    .maybeSingle();
+
+  if (selectError) {
+    throw new Error(`Failed to load user: ${selectError.message}`);
+  }
+
+  if (existingUser) {
+    return existingUser as UserRow;
+  }
+
+  const authUser = await getAuthUserFromSupabaseId(supabaseId);
+
+  if (!authUser) {
+    return null;
+  }
+
+  const fallbackEmail = authUser.email || "";
+  const fallbackName =
+    (authUser.user_metadata?.name as string | undefined) ||
+    (authUser.user_metadata?.full_name as string | undefined) ||
+    null;
+  const fallbackAvatar =
+    (authUser.user_metadata?.avatar_url as string | undefined) ||
+    (authUser.user_metadata?.picture as string | undefined) ||
+    null;
+
+  const { data: insertedUser, error: insertError } = await supabaseAdmin
+    .from("users")
+    .insert({
+      email: fallbackEmail,
+      name: fallbackName,
+      avatarUrl: fallbackAvatar,
+      supabaseId,
+    })
+    .select("id, email, name, avatarUrl, supabaseId")
+    .single();
+
+  if (insertError) {
+    throw new Error(`Failed to create user: ${insertError.message}`);
+  }
+
+  return insertedUser as UserRow;
+}
+
+async function ensureSubscriptionByInternalUserId(
+  internalUserId: string
+): Promise<SubscriptionRow> {
+  const supabaseAdmin = getSupabaseAdmin();
+
+  const { data: existingSubscription, error: selectError } = await supabaseAdmin
+    .from("subscriptions")
+    .select("id, userId, plan, status, startDate, endDate")
+    .eq("userId", internalUserId)
+    .maybeSingle();
+
+  if (selectError) {
+    throw new Error(`Failed to load subscription: ${selectError.message}`);
+  }
+
+  if (existingSubscription) {
+    return existingSubscription as SubscriptionRow;
+  }
+
+  const now = new Date().toISOString();
+
+  const { data: insertedSubscription, error: insertError } = await supabaseAdmin
+    .from("subscriptions")
+    .insert({
+      id: crypto.randomUUID(),
+      userId: internalUserId,
+      plan: "FREE",
+      status: "ACTIVE",
+      startDate: now,
+      createdAt: now,
+      updatedAt: now,
+    })
+    .select("id, userId, plan, status, startDate, endDate")
+    .single();
+
+  if (insertError) {
+    throw new Error(`Failed to create subscription: ${insertError.message}`);
+  }
+
+  return insertedSubscription as SubscriptionRow;
+}
+
+async function normalizeSubscriptionState(
+  subscription: SubscriptionRow
+): Promise<SubscriptionRow> {
+  if (!subscription?.endDate) {
+    return subscription;
+  }
+
+  const endDate = new Date(subscription.endDate);
+  if (Number.isNaN(endDate.getTime())) {
+    return subscription;
+  }
+
   const now = new Date();
-  const startOfMonth = new Date(now.getFullYear(), now.getMonth(), 1).toISOString();
+  if (now < endDate) {
+    return subscription;
+  }
 
-  const { count } = await supabaseAdmin
-    .from("usage_logs")
-    .select("*", { count: "exact", head: true })
-    .eq("userId", supabaseId)
-    .gte("createdAt", startOfMonth);
+  if (subscription.plan === "FREE" && subscription.status === "EXPIRED") {
+    return subscription;
+  }
 
-  const used = count ?? 0;
-  console.log("[checkUsageLimit] supabaseId:", supabaseId, "used:", used);
+  const supabaseAdmin = getSupabaseAdmin();
+  const updateTime = now.toISOString();
 
-  if (used >= FREE_MONTHLY_LIMIT) {
+  const { data: updatedSubscription, error } = await supabaseAdmin
+    .from("subscriptions")
+    .update({
+      plan: "FREE",
+      status: "EXPIRED",
+      updatedAt: updateTime,
+    })
+    .eq("id", subscription.id)
+    .select("id, userId, plan, status, startDate, endDate")
+    .single();
+
+  if (error || !updatedSubscription) {
+    return subscription;
+  }
+
+  return updatedSubscription as SubscriptionRow;
+}
+
+async function getUserContext(supabaseId: string): Promise<{
+  supabaseId: string;
+  internalUserId: string | null;
+  plan: PlanName;
+  subscription: SubscriptionRow | null;
+}> {
+  const publicUser = await ensurePublicUserBySupabaseId(supabaseId);
+
+  if (!publicUser?.id) {
     return {
-      allowed: false,
-      message: "FREE_LIMIT_REACHED",
-      used,
-      limit: FREE_MONTHLY_LIMIT,
+      supabaseId,
+      internalUserId: null,
+      plan: "FREE",
+      subscription: null,
     };
   }
 
-  return { allowed: true, isPro: false, publicUserId: supabaseId };
+  const rawSubscription = await ensureSubscriptionByInternalUserId(publicUser.id);
+  const subscription = await normalizeSubscriptionState(rawSubscription);
+
+  const plan: PlanName =
+    subscription.status === "ACTIVE" &&
+    (
+      subscription.plan === "CREATOR" ||
+      subscription.plan === "PRO" ||
+      subscription.plan === "FLAGSHIP"
+    )
+      ? subscription.plan
+      : "FREE";
+
+  return {
+    supabaseId,
+    internalUserId: publicUser.id,
+    plan,
+    subscription,
+  };
 }
 
-export async function logUsage(userId: string, action: string): Promise<void> {
+export async function getUserPlan(supabaseId: string): Promise<PlanName> {
+  const context = await getUserContext(supabaseId);
+  return context.plan;
+}
+
+export function getActionGroup(action: string): UsageFeature | null {
+  if (action === "ANALYZE") return "ANALYZE";
+
+  if (
+    action === "GENERATE_SCRIPT" ||
+    action === "GENERATE_TITLES" ||
+    action === "GENERATE_IDEAS"
+  ) {
+    return "GENERATE";
+  }
+
+  return null;
+}
+
+export async function checkUsageLimit(
+  supabaseId: string,
+  feature: UsageFeature
+): Promise<
+  | {
+      allowed: true;
+      plan: PlanName;
+      feature: UsageFeature;
+      used: number;
+      limit: number;
+      remaining: number;
+      publicUserId: string;
+      cycleStart: string;
+      cycleEnd: string;
+    }
+  | {
+      allowed: false;
+      message: string;
+      plan: PlanName;
+      feature: UsageFeature;
+      used: number;
+      limit: number;
+      remaining: number;
+      cycleStart: string;
+      cycleEnd: string;
+    }
+> {
   const supabaseAdmin = getSupabaseAdmin();
-  await supabaseAdmin.from("usage_logs").insert({
+  const { plan, subscription } = await getUserContext(supabaseId);
+  const limit = LIMITS[plan][feature];
+
+  const { cycleStart, cycleEnd } = getCurrentCycleWindow(
+    subscription?.startDate ?? null
+  );
+
+  const { data, error } = await supabaseAdmin
+    .from("usage_logs")
+    .select("action, createdAt")
+    .eq("userId", supabaseId)
+    .gte("createdAt", cycleStart)
+    .lt("createdAt", cycleEnd);
+
+  if (error) {
+    throw new Error(`Failed to check usage: ${error.message}`);
+  }
+
+  const used =
+    (data || []).filter((row) => getActionGroup(row.action) === feature)
+      .length || 0;
+
+  const remaining = Math.max(limit - used, 0);
+
+  if (used >= limit) {
+    return {
+      allowed: false,
+      message: `${feature}_LIMIT_REACHED`,
+      plan,
+      feature,
+      used,
+      limit,
+      remaining: 0,
+      cycleStart,
+      cycleEnd,
+    };
+  }
+
+  return {
+    allowed: true,
+    plan,
+    feature,
+    used,
+    limit,
+    remaining,
+    publicUserId: supabaseId,
+    cycleStart,
+    cycleEnd,
+  };
+}
+
+/** 過去 7 天內的分析/生成次數（本週使用小卡用，不增加 AI 成本） */
+export async function getWeekUsage(supabaseId: string): Promise<{
+  analyze: number;
+  generate: number;
+}> {
+  const supabaseAdmin = getSupabaseAdmin();
+  const weekStart = new Date();
+  weekStart.setDate(weekStart.getDate() - 7);
+  const startIso = weekStart.toISOString();
+
+  const { data, error } = await supabaseAdmin
+    .from("usage_logs")
+    .select("action")
+    .eq("userId", supabaseId)
+    .gte("createdAt", startIso);
+
+  if (error) {
+    return { analyze: 0, generate: 0 };
+  }
+
+  let analyze = 0;
+  let generate = 0;
+  for (const row of data || []) {
+    const group = getActionGroup(row.action);
+    if (group === "ANALYZE") analyze += 1;
+    if (group === "GENERATE") generate += 1;
+  }
+  return { analyze, generate };
+}
+
+export async function logUsage(
+  userId: string,
+  action: UsageAction
+): Promise<void> {
+  const supabaseAdmin = getSupabaseAdmin();
+  const now = new Date().toISOString();
+
+  const { error } = await supabaseAdmin.from("usage_logs").insert({
     id: crypto.randomUUID(),
     userId,
     action,
-    date: new Date().toISOString(),
-    createdAt: new Date().toISOString(),
+    date: now,
+    createdAt: now,
   });
+
+  if (error) {
+    throw new Error(`Failed to log usage: ${error.message}`);
+  }
 }

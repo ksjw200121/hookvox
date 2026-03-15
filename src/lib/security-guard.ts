@@ -1,0 +1,285 @@
+import { createClient } from "@supabase/supabase-js";
+
+export type GuardAction =
+  | "ANALYZE"
+  | "GENERATE_SCRIPT"
+  | "GENERATE_IDEAS"
+  | "GENERATE_ANGLE_SCRIPT";
+
+type RateLimitInput = {
+  req: Request;
+  userId?: string | null;
+  routeKey: string;
+  limit: number;
+  windowMinutes: number;
+};
+
+const ACTION_COSTS: Record<GuardAction, number> = {
+  ANALYZE: 0.03,
+  GENERATE_SCRIPT: 0.01,
+  GENERATE_IDEAS: 0.002,
+  GENERATE_ANGLE_SCRIPT: 0.01,
+};
+
+function getSupabaseAdmin() {
+  return createClient(
+    process.env.NEXT_PUBLIC_SUPABASE_URL!,
+    process.env.SUPABASE_SERVICE_ROLE_KEY!
+  );
+}
+
+function getEnvNumber(name: string, fallback: number) {
+  const raw = process.env[name];
+  if (!raw) return fallback;
+  const parsed = Number(raw);
+  return Number.isFinite(parsed) ? parsed : fallback;
+}
+
+export function resolveClientIp(req: Request) {
+  const forwardedFor = req.headers.get("x-forwarded-for");
+  if (forwardedFor) {
+    return forwardedFor.split(",")[0].trim();
+  }
+
+  const realIp = req.headers.get("x-real-ip");
+  if (realIp) {
+    return realIp.trim();
+  }
+
+  const cfIp = req.headers.get("cf-connecting-ip");
+  if (cfIp) {
+    return cfIp.trim();
+  }
+
+  return "unknown";
+}
+
+function getWindowStartIso(windowMinutes: number) {
+  const now = new Date();
+  const ms = windowMinutes * 60 * 1000;
+  const rounded = Math.floor(now.getTime() / ms) * ms;
+  return new Date(rounded).toISOString();
+}
+
+export async function assertRateLimit({
+  req,
+  userId,
+  routeKey,
+  limit,
+  windowMinutes,
+}: RateLimitInput): Promise<
+  | { allowed: true; count: number; remaining: number }
+  | { allowed: false; message: string; count: number; remaining: number }
+> {
+  const supabaseAdmin = getSupabaseAdmin();
+  const ip = resolveClientIp(req);
+  const scope = userId || ip;
+  const windowStart = getWindowStartIso(windowMinutes);
+  const key = `${routeKey}:${scope}:${windowStart}`;
+
+  const { data: existing, error: selectError } = await supabaseAdmin
+    .from("request_guards")
+    .select("id, count")
+    .eq("key", key)
+    .maybeSingle();
+
+  if (selectError) {
+    throw new Error(`Rate limit check failed: ${selectError.message}`);
+  }
+
+  if (!existing) {
+    const { error: insertError } = await supabaseAdmin.from("request_guards").insert({
+      key,
+      user_id: userId || null,
+      ip,
+      route: routeKey,
+      window_start: windowStart,
+      count: 1,
+      created_at: new Date().toISOString(),
+      updated_at: new Date().toISOString(),
+    });
+
+    if (insertError) {
+      throw new Error(`Rate limit insert failed: ${insertError.message}`);
+    }
+
+    return {
+      allowed: true,
+      count: 1,
+      remaining: Math.max(limit - 1, 0),
+    };
+  }
+
+  const nextCount = Number(existing.count || 0) + 1;
+
+  if (nextCount > limit) {
+    return {
+      allowed: false,
+      message: "RATE_LIMIT_EXCEEDED",
+      count: nextCount,
+      remaining: 0,
+    };
+  }
+
+  const { error: updateError } = await supabaseAdmin
+    .from("request_guards")
+    .update({
+      count: nextCount,
+      updated_at: new Date().toISOString(),
+    })
+    .eq("id", existing.id);
+
+  if (updateError) {
+    throw new Error(`Rate limit update failed: ${updateError.message}`);
+  }
+
+  return {
+    allowed: true,
+    count: nextCount,
+    remaining: Math.max(limit - nextCount, 0),
+  };
+}
+
+export async function assertCostGuard(
+  action: GuardAction
+): Promise<
+  | {
+      allowed: true;
+      todayCost: number;
+      hardLimit: number;
+      softLimit: number;
+      estimatedNextCost: number;
+    }
+  | {
+      allowed: false;
+      message: string;
+      todayCost: number;
+      hardLimit: number;
+      softLimit: number;
+      estimatedNextCost: number;
+    }
+> {
+  const enabled = (process.env.AI_COST_GUARD_ENABLED || "true") === "true";
+  const softLimit = getEnvNumber("AI_COST_SOFT_LIMIT_USD", 20);
+  const hardLimit = getEnvNumber("AI_COST_HARD_LIMIT_USD", 30);
+  const estimatedNextCost = ACTION_COSTS[action];
+  const supabaseAdmin = getSupabaseAdmin();
+
+  if (!enabled) {
+    return {
+      allowed: true,
+      todayCost: 0,
+      hardLimit,
+      softLimit,
+      estimatedNextCost,
+    };
+  }
+
+  const today = new Date().toISOString().slice(0, 10);
+
+  const { data, error } = await supabaseAdmin
+    .from("system_runtime_metrics")
+    .select("estimated_cost_usd, hard_locked")
+    .eq("metric_date", today)
+    .maybeSingle();
+
+  if (error) {
+    throw new Error(`Cost guard check failed: ${error.message}`);
+  }
+
+  const todayCost = Number(data?.estimated_cost_usd || 0);
+  const hardLocked = Boolean(data?.hard_locked);
+
+  if (hardLocked || todayCost + estimatedNextCost > hardLimit) {
+    return {
+      allowed: false,
+      message: "AI_COST_HARD_LIMIT_REACHED",
+      todayCost,
+      hardLimit,
+      softLimit,
+      estimatedNextCost,
+    };
+  }
+
+  return {
+    allowed: true,
+    todayCost,
+    hardLimit,
+    softLimit,
+    estimatedNextCost,
+  };
+}
+
+export async function recordEstimatedCost(action: GuardAction) {
+  const enabled = (process.env.AI_COST_GUARD_ENABLED || "true") === "true";
+  if (!enabled) return;
+
+  const hardLimit = getEnvNumber("AI_COST_HARD_LIMIT_USD", 30);
+  const supabaseAdmin = getSupabaseAdmin();
+  const today = new Date().toISOString().slice(0, 10);
+  const deltaCost = ACTION_COSTS[action];
+
+  const { data: existing, error: selectError } = await supabaseAdmin
+    .from("system_runtime_metrics")
+    .select("id, analyze_count, generate_count, estimated_cost_usd, hard_locked")
+    .eq("metric_date", today)
+    .maybeSingle();
+
+  if (selectError) {
+    throw new Error(`Cost metric load failed: ${selectError.message}`);
+  }
+
+  if (!existing) {
+    const analyzeCount = action === "ANALYZE" ? 1 : 0;
+    const generateCount = action === "ANALYZE" ? 0 : 1;
+    const estimatedCost = deltaCost;
+
+    const { error: insertError } = await supabaseAdmin
+      .from("system_runtime_metrics")
+      .insert({
+        metric_date: today,
+        analyze_count: analyzeCount,
+        generate_count: generateCount,
+        estimated_cost_usd: estimatedCost,
+        hard_locked: estimatedCost >= hardLimit,
+        created_at: new Date().toISOString(),
+        updated_at: new Date().toISOString(),
+      });
+
+    if (insertError) {
+      throw new Error(`Cost metric insert failed: ${insertError.message}`);
+    }
+
+    return;
+  }
+
+  const nextAnalyzeCount =
+    Number(existing.analyze_count || 0) + (action === "ANALYZE" ? 1 : 0);
+  const nextGenerateCount =
+    Number(existing.generate_count || 0) + (action === "ANALYZE" ? 0 : 1);
+  const nextEstimatedCost =
+    Number(existing.estimated_cost_usd || 0) + deltaCost;
+
+  const { error: updateError } = await supabaseAdmin
+    .from("system_runtime_metrics")
+    .update({
+      analyze_count: nextAnalyzeCount,
+      generate_count: nextGenerateCount,
+      estimated_cost_usd: nextEstimatedCost,
+      hard_locked: nextEstimatedCost >= hardLimit,
+      updated_at: new Date().toISOString(),
+    })
+    .eq("id", existing.id);
+
+  if (updateError) {
+    throw new Error(`Cost metric update failed: ${updateError.message}`);
+  }
+}
+
+export function getAnalyzeRateLimit() {
+  return getEnvNumber("RATE_LIMIT_ANALYZE_PER_MIN", 6);
+}
+
+export function getGenerateRateLimit() {
+  return getEnvNumber("RATE_LIMIT_GENERATE_PER_MIN", 8);
+}

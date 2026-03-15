@@ -59,3 +59,11 @@ body {
   background-size: 200px 100%;
   animation: shimmer 1.5s infinite;
 }
+
+/* 手機觸控：按鈕最小高度，方便手指點擊 */
+@media (pointer: coarse) {
+  button:not([class*="min-h"]):not([class*="min-height"]),
+  a[role="button"] {
+    min-height: 44px;
+  }
+}
