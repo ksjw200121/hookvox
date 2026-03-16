@@ -203,9 +203,10 @@ export default function BillingPage() {
         setError(data?.error || "取消訂單失敗");
         return;
       }
+      const cancelledOrderId = order.id;
       setOrders((prev) =>
         prev.map((o) =>
-          o.id === order.id ? { ...o, status: "CANCELLED" } : o
+          o.id === cancelledOrderId ? { ...o, status: "CANCELLED" } : o
         )
       );
       const billingRes = await fetch("/api/billing", {
@@ -214,7 +215,10 @@ export default function BillingPage() {
       const billingData = await billingRes.json();
       if (billingRes.ok) {
         setSubscription(billingData.subscription || null);
-        setOrders(billingData.orders || []);
+        const nextOrders = (billingData.orders || []).map((o: OrderRow) =>
+          o.id === cancelledOrderId ? { ...o, status: "CANCELLED" } : o
+        );
+        setOrders(nextOrders);
       }
     } catch {
       setError("取消訂單時發生錯誤，請稍後再試");

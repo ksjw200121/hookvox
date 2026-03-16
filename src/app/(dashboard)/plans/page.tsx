@@ -517,8 +517,15 @@ export default function PlansPage() {
         <div className="fixed inset-0 bg-black/70 backdrop-blur-sm z-50 flex items-center justify-center p-6">
           <div className="bg-dark-800 border border-white/10 rounded-2xl p-8 max-w-md w-full">
             <h3 className="font-bold text-xl mb-3">已有待付款訂單</h3>
-            <p className="text-white/70 text-sm leading-relaxed mb-6">
-              您有一筆尚未完成的付款。請至<strong className="text-white">帳單頁面</strong>，在付款記錄中找到「待付款」並點擊「繼續付款」完成該筆訂單。
+            <p className="text-white/70 text-sm leading-relaxed mb-4">
+              您有一筆尚未完成的付款。請至<strong className="text-white">帳單頁</strong>：
+            </p>
+            <ul className="text-white/70 text-sm leading-relaxed mb-2 list-disc list-inside space-y-1">
+              <li>點「<strong className="text-white">繼續付款</strong>」完成該筆訂單，或</li>
+              <li>點「<strong className="text-white">取消付款</strong>」關閉該筆後，再回方案頁重新下單。</li>
+            </ul>
+            <p className="text-white/50 text-xs leading-relaxed mb-6">
+              若您已取消該筆訂單，請關閉此視窗並<strong>重新整理本頁</strong>（F5 或 Ctrl+R）後再試。
             </p>
             <div className="flex gap-3">
               <button
