@@ -1,7 +1,7 @@
 import { NextResponse } from "next/server";
 import crypto from "crypto";
 import { createClient } from "@supabase/supabase-js";
-import { getUserIdFromRequest } from "@/lib/usage-checker";
+import { getUserIdFromRequest, ensurePublicUserBySupabaseId } from "@/lib/usage-checker";
 
 export const runtime = "nodejs";
 
@@ -130,19 +130,8 @@ export async function POST(req: Request) {
 
     const supabaseAdmin = getSupabaseAdmin();
 
-    const { data: publicUser, error: userError } = await supabaseAdmin
-      .from("users")
-      .select("id")
-      .eq("supabaseId", supabaseId)
-      .maybeSingle();
-
-    if (userError) {
-      return NextResponse.json(
-        { error: `讀取使用者失敗: ${userError.message}` },
-        { status: 500 }
-      );
-    }
-
+    // 新註冊用戶可能尚未有 public.users 列，先同步建立
+    const publicUser = await ensurePublicUserBySupabaseId(supabaseId);
     if (!publicUser?.id) {
       return NextResponse.json({ error: "找不到對應的使用者資料" }, { status: 400 });
     }

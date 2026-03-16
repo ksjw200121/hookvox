@@ -1,6 +1,6 @@
 import { NextResponse } from "next/server";
 import { createClient } from "@supabase/supabase-js";
-import { getUserIdFromRequest } from "@/lib/usage-checker";
+import { getUserIdFromRequest, ensurePublicUserBySupabaseId } from "@/lib/usage-checker";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -36,13 +36,9 @@ export async function GET(req: Request) {
 
     const supabaseAdmin = getSupabaseAdmin();
 
-    const { data: publicUser, error: userError } = await supabaseAdmin
-      .from("users")
-      .select("id")
-      .eq("supabaseId", supabaseId)
-      .maybeSingle();
-
-    if (userError || !publicUser?.id) {
+    // 新註冊用戶可能尚未有 public.users 列，先同步建立
+    const publicUser = await ensurePublicUserBySupabaseId(supabaseId);
+    if (!publicUser?.id) {
       return NextResponse.json(
         { error: "找不到使用者資料" },
         { status: 400 }

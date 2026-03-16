@@ -119,7 +119,7 @@ async function getAuthUserFromSupabaseId(supabaseId: string) {
   return data.user;
 }
 
-async function ensurePublicUserBySupabaseId(
+export async function ensurePublicUserBySupabaseId(
   supabaseId: string
 ): Promise<UserRow | null> {
   const supabaseAdmin = getSupabaseAdmin();
