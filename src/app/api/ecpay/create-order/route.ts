@@ -278,7 +278,7 @@ export async function POST(req: Request) {
       TradeDesc: "Hookvox 訂閱升級",
       ItemName: `${getPlanLabel(plan)}-${getCycleLabel(billingCycle)}`,
       ReturnURL: notifyUrl,
-      ChoosePayment: "Credit",
+      ChoosePayment: "ALL",
       ClientBackURL: clientBackUrl,
       OrderResultURL: resultUrl,
       NeedExtraPaidInfo: "Y",
