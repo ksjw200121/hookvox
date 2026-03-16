@@ -8,6 +8,55 @@ export type ParsedUrlResult = {
   rawMeta: Record<string, string>;
 };
 
+function assertSafePublicUrl(input: string) {
+  let u: URL;
+  try {
+    u = new URL(input);
+  } catch {
+    throw new Error("網址格式錯誤");
+  }
+
+  if (u.protocol !== "http:" && u.protocol !== "https:") {
+    throw new Error("僅支援 http/https 網址");
+  }
+
+  const hostname = (u.hostname || "").toLowerCase();
+  if (!hostname) {
+    throw new Error("網址格式錯誤");
+  }
+
+  // Block obvious SSRF targets early
+  if (
+    hostname === "localhost" ||
+    hostname.endsWith(".localhost") ||
+    hostname.endsWith(".local") ||
+    hostname === "0.0.0.0" ||
+    hostname === "127.0.0.1" ||
+    hostname === "::1"
+  ) {
+    throw new Error("不支援此網址");
+  }
+
+  // Allow-list only known public platforms to avoid SSRF abuse
+  const allowedHosts = new Set([
+    "youtube.com",
+    "www.youtube.com",
+    "m.youtube.com",
+    "youtu.be",
+    "instagram.com",
+    "www.instagram.com",
+    "tiktok.com",
+    "www.tiktok.com",
+    "vm.tiktok.com",
+  ]);
+
+  if (!allowedHosts.has(hostname)) {
+    throw new Error("目前僅支援 YouTube / IG / TikTok 網址");
+  }
+
+  return u;
+}
+
 function detectPlatform(url: string): ParsedUrlResult["platform"] {
   const u = url.toLowerCase();
   if (u.includes("instagram.com")) return "instagram";
@@ -87,9 +136,14 @@ function pickFirst(...values: Array<string | undefined | null>) {
 }
 
 export async function parsePublicUrl(url: string): Promise<ParsedUrlResult> {
+  const safeUrl = assertSafePublicUrl(url);
   const platform = detectPlatform(url);
 
-  const res = await fetch(url, {
+  if (platform === "unknown") {
+    throw new Error("不支援的網址");
+  }
+
+  const res = await fetch(safeUrl.toString(), {
     headers: {
       "user-agent":
         "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/127.0.0.0 Safari/537.36",

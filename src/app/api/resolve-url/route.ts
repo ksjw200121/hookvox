@@ -1,10 +1,32 @@
 import { NextResponse } from "next/server";
 import { parsePublicUrl } from "@/lib/url-parser";
+import { getUserIdFromRequest } from "@/lib/usage-checker";
+import { assertRateLimit, getAnalyzeRateLimit } from "@/lib/security-guard";
 
 export const runtime = "nodejs";
 
 export async function POST(req: Request) {
   try {
+    const userId = await getUserIdFromRequest(req);
+    if (!userId) {
+      return NextResponse.json({ error: "未登入" }, { status: 401 });
+    }
+
+    const rate = await assertRateLimit({
+      req,
+      userId,
+      routeKey: "resolve-url",
+      limit: Math.max(getAnalyzeRateLimit(), 10),
+      windowMinutes: 1,
+    });
+
+    if (!rate.allowed) {
+      return NextResponse.json(
+        { error: "操作太頻繁，請稍後再試" },
+        { status: 429 }
+      );
+    }
+
     const body = await req.json();
     const url = String(body?.url || "").trim();
 
