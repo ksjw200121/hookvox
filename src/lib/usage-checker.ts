@@ -231,6 +231,17 @@ async function ensureSubscriptionByInternalUserId(
     .single();
 
   if (insertError) {
+    const isDuplicateUserId =
+      insertError.code === "23505" ||
+      String(insertError.message || "").includes("subscriptions_userId_key");
+    if (isDuplicateUserId) {
+      const { data: row, error: retryErr } = await supabaseAdmin
+        .from("subscriptions")
+        .select("id, userId, plan, status, startDate, endDate")
+        .eq("userId", internalUserId)
+        .maybeSingle();
+      if (!retryErr && row) return row as SubscriptionRow;
+    }
     throw new Error(`Failed to create subscription: ${insertError.message}`);
   }
 
