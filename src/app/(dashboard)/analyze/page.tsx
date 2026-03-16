@@ -117,7 +117,7 @@ const PURPOSE_COLORS: Record<string, string> = {
   CTA: "#4ade80",
 };
 
-const ACCEPTED_FILE_TYPES = ".mp3,.mp4,.m4a,.wav,.mov";
+const ACCEPTED_FILE_TYPES = ".mp3,.mp4,.m4a,.wav,.webm,.ogg,.flac,.mpeg,.mpga";
 // 小檔直接送 API（請求 body 上限約 4.5 MB，base64 約 1.33 倍 → 約 3 MB）
 const MAX_INLINE_MB = 3;
 const MAX_INLINE_BYTES = MAX_INLINE_MB * 1024 * 1024;
@@ -273,9 +273,9 @@ export default function AnalyzePage() {
     setError("");
     setUsageLimitReached(false);
 
-    const allowedTypes = ["audio/mpeg", "audio/mp3", "audio/mp4", "audio/m4a", "audio/x-m4a", "audio/wav", "audio/x-wav", "video/mp4", "video/quicktime"];
+    const allowedTypes = ["audio/mpeg", "audio/mp3", "audio/mp4", "audio/m4a", "audio/x-m4a", "audio/wav", "audio/x-wav", "video/mp4", "video/webm", "audio/ogg", "audio/flac"];
     if (!allowedTypes.includes(file.type)) {
-      setUploadError("不支援的檔案格式，請上傳 mp3 / mp4 / m4a / wav / mov");
+      setUploadError("不支援的檔案格式，請上傳 mp3 / mp4 / m4a / wav / webm（勿用 .mov，請先轉成 mp4）");
       setUploadFile(null);
       setUploadSuccess(false);
       return;
@@ -641,7 +641,7 @@ export default function AnalyzePage() {
               <div>
                 <FieldBlock
                   label="上傳音訊或影片"
-                  hint="支援 mp3 / mp4 / m4a / wav / mov，單檔上限 50MB；分析完成後檔案會自動刪除，不佔空間。上傳後按「開始爆款分析」。"
+                  hint="支援 mp3 / mp4 / m4a / wav / webm 等；.mov 請先轉成 mp4。單檔上限 50MB，分析完成後自動刪除。上傳後按「開始爆款分析」。"
                 >
                   <input
                     ref={fileInputRef}
@@ -688,7 +688,7 @@ export default function AnalyzePage() {
                         <div style={{ fontSize: 32, marginBottom: 8 }}>🎵</div>
                         <div style={{ color: "#888", fontSize: 14 }}>點擊選擇檔案</div>
                         <div style={{ color: "#444", fontSize: 12, marginTop: 6 }}>
-                          mp3 / mp4 / m4a / wav / mov，最大 50MB
+                          mp3 / mp4 / m4a / wav / webm，最大 50MB（.mov 請轉 mp4）
                         </div>
                       </div>
                     )}

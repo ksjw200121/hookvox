@@ -25,6 +25,12 @@ export const runtime = "nodejs";
 
 const ANALYZE_UPLOADS_BUCKET = "analyze-uploads";
 
+const WHISPER_SUPPORTED_EXT = ["flac", "m4a", "mp3", "mp4", "mpeg", "mpga", "oga", "ogg", "wav", "webm"];
+
+function isWhisperSupportedExt(ext: string): boolean {
+  return WHISPER_SUPPORTED_EXT.includes(ext.toLowerCase());
+}
+
 function getSupabaseAdmin() {
   return createClient(
     process.env.NEXT_PUBLIC_SUPABASE_URL!,
@@ -269,6 +275,12 @@ export async function POST(req: Request) {
 
         const buffer = Buffer.from(await blob.arrayBuffer());
         const ext = storagePath.split(".").pop()?.toLowerCase() || "mp4";
+        if (!isWhisperSupportedExt(ext)) {
+          return NextResponse.json(
+            { error: `不支援的檔案格式。請使用：${WHISPER_SUPPORTED_EXT.join(", ")}。.mov 請先轉成 mp4。` },
+            { status: 400 }
+          );
+        }
         const mimeType = ext === "mp3" || ext === "m4a" ? "audio/mpeg" : "video/mp4";
         const uploadedFile = await toFile(buffer, `audio.${ext}`, { type: mimeType });
 
