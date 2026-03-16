@@ -54,71 +54,75 @@ export default function BillingPage() {
   const [continuingId, setContinuingId] = useState<string | null>(null);
   const [cancellingId, setCancellingId] = useState<string | null>(null);
 
-  useEffect(() => {
-    async function load() {
-      try {
-        setLoading(true);
-        setError("");
-        const supabase = createClient();
-        const {
-          data: { session },
-        } = await supabase.auth.getSession();
-        const token = session?.access_token;
+  async function loadData() {
+    try {
+      setLoading(true);
+      setError("");
+      const supabase = createClient();
+      const {
+        data: { session },
+      } = await supabase.auth.getSession();
+      const token = session?.access_token;
 
-        if (!token) {
-          setSubscription({
-            plan: "FREE",
-            planLabel: PLAN_LABELS.FREE,
-            status: "FREE",
-            startDate: null,
-            endDate: null,
-          });
-          setOrders([]);
-          setUsage(null);
-          return;
-        }
-
-        const [billingRes, usageRes] = await Promise.all([
-          fetch("/api/billing", { headers: { Authorization: `Bearer ${token}` } }),
-          fetch("/api/usage", { headers: { Authorization: `Bearer ${token}` } }),
-        ]);
-
-        const billingData = await billingRes.json();
-        const usageData = await usageRes.json();
-
-        if (!billingRes.ok) {
-          setError(billingData?.error || "無法載入帳單");
-          return;
-        }
-
-        setSubscription(billingData.subscription || null);
-        setOrders(billingData.orders || []);
-
-        if (usageRes.ok && usageData?.usage) {
-          setUsage({
-            analyze: {
-              used: usageData.usage.analyze?.used ?? 0,
-              limit: usageData.usage.analyze?.limit ?? 0,
-              remaining: usageData.usage.analyze?.remaining ?? 0,
-            },
-            generate: {
-              used: usageData.usage.generate?.used ?? 0,
-              limit: usageData.usage.generate?.limit ?? 0,
-              remaining: usageData.usage.generate?.remaining ?? 0,
-            },
-            cycleEnd: usageData.usage.analyze?.cycleEnd ?? null,
-          });
-        } else {
-          setUsage(null);
-        }
-      } catch (e) {
-        setError("載入失敗，請稍後再試");
-      } finally {
+      if (!token) {
+        setSubscription({
+          plan: "FREE",
+          planLabel: PLAN_LABELS.FREE,
+          status: "FREE",
+          startDate: null,
+          endDate: null,
+        });
+        setOrders([]);
+        setUsage(null);
         setLoading(false);
+        return;
       }
-    }
 
-    load();
+      const [billingRes, usageRes] = await Promise.all([
+        fetch("/api/billing", { headers: { Authorization: `Bearer ${token}` } }),
+        fetch("/api/usage", { headers: { Authorization: `Bearer ${token}` } }),
+      ]);
+
+      const billingData = await billingRes.json();
+      const usageData = await usageRes.json();
+
+      if (!billingRes.ok) {
+        setError(billingData?.error || "無法載入帳單");
+        return;
+      }
+
+      setSubscription(billingData.subscription || null);
+      setOrders(billingData.orders || []);
+
+      if (usageRes.ok && usageData?.usage) {
+        setUsage({
+          analyze: {
+            used: usageData.usage.analyze?.used ?? 0,
+            limit: usageData.usage.analyze?.limit ?? 0,
+            remaining: usageData.usage.analyze?.remaining ?? 0,
+          },
+          generate: {
+            used: usageData.usage.generate?.used ?? 0,
+            limit: usageData.usage.generate?.limit ?? 0,
+            remaining: usageData.usage.generate?.remaining ?? 0,
+          },
+          cycleEnd: usageData.usage.analyze?.cycleEnd ?? null,
+        });
+      } else {
+        setUsage(null);
+      }
+    } catch (e) {
+      setError("載入失敗，請稍後再試");
+    } finally {
+      setLoading(false);
+    }
+  }
+
+  useEffect(() => {
+    loadData();
+    const onVisible = () => loadData();
+    document.addEventListener("visibilitychange", onVisible);
+    return () => document.removeEventListener("visibilitychange", onVisible);
   }, []);
 
   function formatDate(iso: string | null) {
@@ -199,6 +203,11 @@ export default function BillingPage() {
         setError(data?.error || "取消訂單失敗");
         return;
       }
+      setOrders((prev) =>
+        prev.map((o) =>
+          o.id === order.id ? { ...o, status: "CANCELLED" } : o
+        )
+      );
       const billingRes = await fetch("/api/billing", {
         headers: { Authorization: `Bearer ${token}` },
       });
@@ -385,7 +394,9 @@ export default function BillingPage() {
                       </button>
                     </div>
                   ) : (
-                    <p className="text-xs text-white/40">{order.status}</p>
+                    <p className="text-xs text-white/40">
+                      {order.status === "CANCELLED" ? "已取消" : order.status}
+                    </p>
                   )}
                 </div>
               </div>

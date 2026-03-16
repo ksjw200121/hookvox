@@ -131,20 +131,12 @@ export default function DashboardLayout({
             <Link href="/refund" className="hover:text-white/60 transition-colors">
               退款政策
             </Link>
-            <a
-              href="mailto:hookvox.support@gmail.com"
+            <Link
+              href="/contact"
               className="hover:text-white/60 transition-colors"
             >
               聯繫客服
-            </a>
-            <a
-              href="https://www.instagram.com/fang.0721/"
-              target="_blank"
-              rel="noopener noreferrer"
-              className="hover:text-white/60 transition-colors"
-            >
-              IG
-            </a>
+            </Link>
           </div>
         </div>
       </footer>
