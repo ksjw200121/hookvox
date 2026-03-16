@@ -19,8 +19,18 @@ import {
   downloadPublicVideo,
   cleanupDownloadedVideo,
 } from "@/lib/video-downloader";
+import { createClient } from "@supabase/supabase-js";
 
 export const runtime = "nodejs";
+
+const ANALYZE_UPLOADS_BUCKET = "analyze-uploads";
+
+function getSupabaseAdmin() {
+  return createClient(
+    process.env.NEXT_PUBLIC_SUPABASE_URL!,
+    process.env.SUPABASE_SERVICE_ROLE_KEY!
+  );
+}
 
 const openai = new OpenAI({ apiKey: process.env.OPENAI_API_KEY });
 const anthropic = new Anthropic({ apiKey: process.env.ANTHROPIC_API_KEY });
@@ -234,6 +244,46 @@ export async function POST(req: Request) {
         if (!transcript) {
           return NextResponse.json(
             { error: "無法從影片辨識語音內容" },
+            { status: 500 }
+          );
+        }
+      } else if (body?.storagePath && typeof body.storagePath === "string") {
+        const storagePath = String(body.storagePath).trim();
+        if (!storagePath.startsWith(userId + "/") && !storagePath.startsWith(userId + "\\")) {
+          return NextResponse.json(
+            { error: "無效的檔案路徑" },
+            { status: 400 }
+          );
+        }
+        const supabaseAdmin = getSupabaseAdmin();
+        const { data: blob, error: downloadError } = await supabaseAdmin.storage
+          .from(ANALYZE_UPLOADS_BUCKET)
+          .download(storagePath);
+
+        if (downloadError || !blob) {
+          return NextResponse.json(
+            { error: "無法讀取上傳檔案，請重新上傳" },
+            { status: 400 }
+          );
+        }
+
+        const buffer = Buffer.from(await blob.arrayBuffer());
+        const ext = storagePath.split(".").pop()?.toLowerCase() || "mp4";
+        const mimeType = ext === "mp3" || ext === "m4a" ? "audio/mpeg" : "video/mp4";
+        const uploadedFile = await toFile(buffer, `audio.${ext}`, { type: mimeType });
+
+        const transcription = await openai.audio.transcriptions.create({
+          file: uploadedFile,
+          model: "whisper-1",
+        });
+
+        transcript = transcription.text?.trim() || "";
+
+        await supabaseAdmin.storage.from(ANALYZE_UPLOADS_BUCKET).remove([storagePath]);
+
+        if (!transcript) {
+          return NextResponse.json(
+            { error: "Whisper 無法辨識語音，請確認音訊品質" },
             { status: 500 }
           );
         }

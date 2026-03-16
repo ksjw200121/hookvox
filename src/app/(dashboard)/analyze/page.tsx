@@ -118,9 +118,12 @@ const PURPOSE_COLORS: Record<string, string> = {
 };
 
 const ACCEPTED_FILE_TYPES = ".mp3,.mp4,.m4a,.wav,.mov";
-// 主機單次請求約 4.5 MB，base64 會變大約 1.33 倍，故檔案上限約 3 MB
-const MAX_FILE_SIZE_MB = 3;
-const MAX_FILE_BYTES = MAX_FILE_SIZE_MB * 1024 * 1024;
+// 小檔直接送 API（請求 body 上限約 4.5 MB，base64 約 1.33 倍 → 約 3 MB）
+const MAX_INLINE_MB = 3;
+const MAX_INLINE_BYTES = MAX_INLINE_MB * 1024 * 1024;
+// 大檔先上傳 Supabase Storage 再分析，分析完自動刪檔
+const MAX_UPLOAD_MB = 50;
+const MAX_UPLOAD_BYTES = MAX_UPLOAD_MB * 1024 * 1024;
 
 function copyText(text: string) {
   navigator.clipboard?.writeText(text).catch(() => {});
@@ -277,8 +280,8 @@ export default function AnalyzePage() {
       setUploadSuccess(false);
       return;
     }
-    if (file.size > MAX_FILE_BYTES) {
-      setUploadError(`檔案超過 ${MAX_FILE_SIZE_MB}MB。較長影片請改用「貼上逐字稿」或 YouTube Shorts 網址分析。`);
+    if (file.size > MAX_UPLOAD_BYTES) {
+      setUploadError(`檔案超過 ${MAX_UPLOAD_MB}MB。請縮短影片或改用「貼上逐字稿」/ YouTube Shorts 網址。`);
       setUploadFile(null);
       setUploadSuccess(false);
       return;
@@ -326,20 +329,37 @@ export default function AnalyzePage() {
         }
         body = { transcript: pasteTranscript };
       } else if (inputMode === "upload" && uploadFile) {
-        const buffer = await uploadFile.arrayBuffer();
-        const bytes = new Uint8Array(buffer);
-        const chunkSize = 8192;
-        let binary = "";
-        for (let i = 0; i < bytes.length; i += chunkSize) {
-          const chunk = bytes.subarray(i, Math.min(i + chunkSize, bytes.length));
-          binary += String.fromCharCode.apply(null, Array.from(chunk));
+        const { data: { session } } = await supabase.auth.getSession();
+        if (!session?.user?.id) {
+          setError("請先登入再上傳檔案");
+          setLoadingAnalyze(false);
+          return;
         }
-        const base64 = btoa(binary);
-        const isVideo = (uploadFile.type || "").toLowerCase().startsWith("video/");
-        if (isVideo) {
-          body = { videoBase64: base64 };
+        const safeName = uploadFile.name.replace(/[^a-zA-Z0-9._-]/g, "_").slice(0, 80);
+        const storagePath = `${session.user.id}/${Date.now()}-${safeName}`;
+
+        if (uploadFile.size <= MAX_INLINE_BYTES) {
+          const buffer = await uploadFile.arrayBuffer();
+          const bytes = new Uint8Array(buffer);
+          const chunkSize = 8192;
+          let binary = "";
+          for (let i = 0; i < bytes.length; i += chunkSize) {
+            const chunk = bytes.subarray(i, Math.min(i + chunkSize, bytes.length));
+            binary += String.fromCharCode.apply(null, Array.from(chunk));
+          }
+          const base64 = btoa(binary);
+          const isVideo = (uploadFile.type || "").toLowerCase().startsWith("video/");
+          body = isVideo ? { videoBase64: base64 } : { audioBase64: base64 };
         } else {
-          body = { audioBase64: base64 };
+          const { error: uploadErr } = await supabase.storage
+            .from("analyze-uploads")
+            .upload(storagePath, uploadFile, { contentType: uploadFile.type || "video/mp4", upsert: false });
+          if (uploadErr) {
+            setError(uploadErr.message || "上傳失敗，請檢查是否已建立 Storage 桶「analyze-uploads」");
+            setLoadingAnalyze(false);
+            return;
+          }
+          body = { storagePath };
         }
       } else {
         setError("請先上傳音訊或影片檔案，再按「開始爆款分析」");
@@ -392,7 +412,7 @@ export default function AnalyzePage() {
     } catch (err: any) {
       const msg = err?.message || "分析失敗";
       if (typeof msg === "string" && (msg.includes("Request Entity Too Large") || msg.includes("PAYLOAD_TOO_LARGE"))) {
-        setError("檔案過大，主機無法處理。請上傳 3MB 以內的影片/音訊，或改用「貼上逐字稿」/ YouTube Shorts 網址。");
+        setError("檔案過大。若為大檔請重新整理後再試（會改走 Storage 上傳）；或改用「貼上逐字稿」/ YouTube Shorts 網址。");
       } else {
         setError(msg);
       }
@@ -621,7 +641,7 @@ export default function AnalyzePage() {
               <div>
                 <FieldBlock
                   label="上傳音訊或影片"
-                  hint="支援 mp3 / mp4 / m4a / wav / mov，單檔上限 3MB（較長影片請用「貼逐字稿」或 YouTube Shorts）。上傳後按「開始爆款分析」。"
+                  hint="支援 mp3 / mp4 / m4a / wav / mov，單檔上限 50MB；分析完成後檔案會自動刪除，不佔空間。上傳後按「開始爆款分析」。"
                 >
                   <input
                     ref={fileInputRef}
@@ -668,7 +688,7 @@ export default function AnalyzePage() {
                         <div style={{ fontSize: 32, marginBottom: 8 }}>🎵</div>
                         <div style={{ color: "#888", fontSize: 14 }}>點擊選擇檔案</div>
                         <div style={{ color: "#444", fontSize: 12, marginTop: 6 }}>
-                          mp3 / mp4 / m4a / wav / mov，最大 3MB
+                          mp3 / mp4 / m4a / wav / mov，最大 50MB
                         </div>
                       </div>
                     )}
