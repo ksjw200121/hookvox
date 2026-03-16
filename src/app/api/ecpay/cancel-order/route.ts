@@ -54,14 +54,18 @@ export async function POST(req: Request) {
     }
 
     const nowIso = new Date().toISOString();
-    const { error: updateError } = await supabaseAdmin
+    const { data: updatedRow, error: updateError } = await supabaseAdmin
       .from("orders")
       .update({ status: "CANCELLED", updatedAt: nowIso })
-      .eq("merchantTradeNo", merchantTradeNo);
+      .eq("merchantTradeNo", merchantTradeNo)
+      .eq("userId", publicUser.id)
+      .select("status")
+      .single();
 
-    if (updateError) {
+    if (updateError || updatedRow?.status !== "CANCELLED") {
+      console.error("cancel-order update failed or not applied:", updateError, updatedRow);
       return NextResponse.json(
-        { error: "取消訂單失敗，請稍後再試" },
+        { error: "取消訂單未生效，請稍後再試" },
         { status: 500 }
       );
     }

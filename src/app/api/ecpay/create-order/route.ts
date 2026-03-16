@@ -190,7 +190,7 @@ export async function POST(req: Request) {
       );
     }
 
-    const { data: pendingOrders, error: pendingOrderError } = await supabaseAdmin
+    let { data: pendingOrders, error: pendingOrderError } = await supabaseAdmin
       .from("orders")
       .select("id, plan, billingCycle, merchantTradeNo, createdAt")
       .eq("userId", publicUser.id)
@@ -203,6 +203,19 @@ export async function POST(req: Request) {
         { error: `檢查待付款訂單失敗: ${pendingOrderError.message}` },
         { status: 500 }
       );
+    }
+
+    if (pendingOrders && pendingOrders.length > 0) {
+      await new Promise((r) => setTimeout(r, 1500));
+      const { data: retryPending } = await supabaseAdmin
+        .from("orders")
+        .select("id")
+        .eq("userId", publicUser.id)
+        .eq("status", "PENDING")
+        .limit(1);
+      if (retryPending && retryPending.length === 0) {
+        pendingOrders = [];
+      }
     }
 
     if (pendingOrders && pendingOrders.length > 0) {

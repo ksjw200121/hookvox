@@ -525,7 +525,7 @@ export default function PlansPage() {
               <li>點「<strong className="text-white">取消付款</strong>」關閉該筆後，再回方案頁重新下單。</li>
             </ul>
             <p className="text-white/50 text-xs leading-relaxed mb-6">
-              若您已取消該筆訂單，請關閉此視窗並<strong>重新整理本頁</strong>（F5 或 Ctrl+R）後再試。
+              若您剛取消該筆訂單，請<strong>稍等 3～5 秒</strong>後關閉此視窗並<strong>重新整理方案頁</strong>（F5）再試。
             </p>
             <div className="flex gap-3">
               <button
