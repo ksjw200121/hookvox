@@ -181,21 +181,6 @@ export async function POST(
       ? analysis.nextAngles
       : [];
 
-    if (existingAngles.length > 0) {
-      return NextResponse.json({
-        success: true,
-        cached: true,
-        item: {
-          ...item,
-          analysis,
-        },
-        meta: {
-          plan,
-          angleScriptLimitPerVideo,
-        },
-      });
-    }
-
     const usage = await checkUsageLimit(userId, "GENERATE");
 
     if (!usage.allowed) {
@@ -210,6 +195,24 @@ export async function POST(
         },
         { status: 403 }
       );
+    }
+
+    if (existingAngles.length > 0) {
+      await logUsage(userId, "GENERATE_IDEAS");
+      await recordEstimatedCost("GENERATE_IDEAS");
+
+      return NextResponse.json({
+        success: true,
+        cached: true,
+        item: {
+          ...item,
+          analysis,
+        },
+        meta: {
+          plan,
+          angleScriptLimitPerVideo,
+        },
+      });
     }
 
     const prompt = `請根據以下爆款分析結果，生成 3 個最值得拍的延伸角度。

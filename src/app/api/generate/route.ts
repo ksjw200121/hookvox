@@ -322,21 +322,6 @@ export async function POST(req: Request) {
 
     const cachedGenerated = getGeneratedPayload(existingAnalysis);
 
-    if (
-      cachedGenerated.titles.length > 0 &&
-      cachedGenerated.scripts.length > 0
-    ) {
-      return NextResponse.json({
-        success: true,
-        cached: true,
-        titles: cachedGenerated.titles,
-        bestScriptVersion: cachedGenerated.bestScriptVersion,
-        scripts: cachedGenerated.scripts,
-        storyboard: cachedGenerated.storyboard,
-        adaptedVersion: cachedGenerated.adaptedVersion,
-      });
-    }
-
     const usage = await checkUsageLimit(userId, "GENERATE");
 
     if (!usage.allowed) {
@@ -354,6 +339,24 @@ export async function POST(req: Request) {
     }
 
     const publicUserId = usage.publicUserId ?? userId;
+
+    if (
+      cachedGenerated.titles.length > 0 &&
+      cachedGenerated.scripts.length > 0
+    ) {
+      await logUsage(publicUserId, "GENERATE");
+      await recordEstimatedCost("GENERATE");
+
+      return NextResponse.json({
+        success: true,
+        cached: true,
+        titles: cachedGenerated.titles,
+        bestScriptVersion: cachedGenerated.bestScriptVersion,
+        scripts: cachedGenerated.scripts,
+        storyboard: cachedGenerated.storyboard,
+        adaptedVersion: cachedGenerated.adaptedVersion,
+      });
+    }
     const finalTopic = userTopic || substitution || topic || "";
     const storyboardRequired = Boolean(wantStoryboard);
 

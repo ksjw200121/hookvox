@@ -249,21 +249,6 @@ export async function POST(
 
     const selectedAngle = nextAngles[angleIndex];
 
-    if (selectedAngle?.generatedScript) {
-      return NextResponse.json({
-        success: true,
-        cached: true,
-        item: {
-          ...item,
-          analysis,
-        },
-        meta: {
-          plan,
-          angleScriptLimitPerVideo,
-        },
-      });
-    }
-
     const generatedCount = nextAngles.filter((angle: any) => angle?.generatedScript).length;
 
     if (generatedCount >= angleScriptLimitPerVideo) {
@@ -298,6 +283,24 @@ export async function POST(
         },
         { status: 403 }
       );
+    }
+
+    if (selectedAngle?.generatedScript) {
+      await logUsage(userId, "GENERATE_SCRIPT");
+      await recordEstimatedCost("GENERATE_ANGLE_SCRIPT");
+
+      return NextResponse.json({
+        success: true,
+        cached: true,
+        item: {
+          ...item,
+          analysis,
+        },
+        meta: {
+          plan,
+          angleScriptLimitPerVideo,
+        },
+      });
     }
 
     const prompt = `請根據以下資料，生成一份延伸短影音腳本。

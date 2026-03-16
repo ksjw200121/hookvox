@@ -194,44 +194,6 @@ export async function POST(req: Request) {
       }
     }
 
-    if (url) {
-      const existing = await prisma.viralDatabase.findFirst({
-        where: { userId, videoUrl: url },
-        orderBy: { createdAt: "desc" },
-      });
-
-      if (existing) {
-        const existingAnalysis = (existing.analysis || {}) as Record<string, unknown>;
-        const normalizedExisting: Record<string, unknown> = {
-          ...existingAnalysis,
-        };
-        if (!normalizedExisting.hookModel) {
-          const anyExisting = existingAnalysis as any;
-          normalizedExisting.hookModel =
-            anyExisting?.hookModel ||
-            anyExisting?.hookStyle ||
-            anyExisting?.hookType ||
-            "";
-        }
-
-        if (JSON.stringify(normalizedExisting) !== JSON.stringify(existingAnalysis)) {
-          await prisma.viralDatabase.update({
-            where: { id: existing.id },
-            data: { analysis: normalizedExisting },
-          });
-        }
-
-        return NextResponse.json({
-          success: true,
-          cached: true,
-          transcript: existing.transcript || "",
-          analysis: normalizedExisting,
-          usage: null,
-          message: "這支影片你已經分析過，已直接讀取資料庫內容",
-        });
-      }
-    }
-
     const usage = await checkUsageLimit(userId, "ANALYZE");
     if (!usage.allowed) {
       return NextResponse.json(
@@ -248,6 +210,60 @@ export async function POST(req: Request) {
     }
 
     const publicUserId = usage.publicUserId ?? userId;
+
+    if (url) {
+      const existing = await prisma.viralDatabase.findFirst({
+        where: { userId, videoUrl: url },
+        orderBy: { createdAt: "desc" },
+      });
+
+      if (existing) {
+        const existingAnalysis = (existing.analysis || {}) as Record<string, unknown>;
+        const normalizedExisting: Record<string, unknown> = {
+          ...existingAnalysis,
+        };
+        const anyExisting = existingAnalysis as any;
+        if (!normalizedExisting.hookModel) {
+          normalizedExisting.hookModel =
+            anyExisting?.hookModel ||
+            anyExisting?.hookStyle ||
+            anyExisting?.hookType ||
+            "";
+        }
+        if (!normalizedExisting.hook) {
+          normalizedExisting.hook =
+            anyExisting?.hook ||
+            anyExisting?.opening ||
+            (Array.isArray(anyExisting?.contentStructure)
+              ? anyExisting.contentStructure[0]
+              : "") ||
+            "";
+        }
+
+        if (JSON.stringify(normalizedExisting) !== JSON.stringify(existingAnalysis)) {
+          await prisma.viralDatabase.update({
+            where: { id: existing.id },
+            data: { analysis: normalizedExisting },
+          });
+        }
+
+        await logUsage(publicUserId, "ANALYZE");
+        await recordEstimatedCost("ANALYZE");
+
+        return NextResponse.json({
+          success: true,
+          cached: true,
+          transcript: existing.transcript || "",
+          analysis: normalizedExisting,
+          usage: {
+            used: usage.used + 1,
+            limit: usage.limit,
+            remaining: Math.max(usage.limit - (usage.used + 1), 0),
+          },
+          message: "這支影片你已經分析過，已直接讀取資料庫內容",
+        });
+      }
+    }
 
     if (!transcript) {
       if (url) {
