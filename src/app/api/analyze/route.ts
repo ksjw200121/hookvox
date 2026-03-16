@@ -374,12 +374,25 @@ export async function POST(req: Request) {
       );
     }
 
+    const normalizedAnalysis: Record<string, unknown> = {
+      ...analysis,
+    };
+
+    if (!normalizedAnalysis.hookModel) {
+      const anyAnalysis = analysis as any;
+      normalizedAnalysis.hookModel =
+        anyAnalysis?.hookModel ||
+        anyAnalysis?.hookStyle ||
+        anyAnalysis?.hookType ||
+        "";
+    }
+
     await prisma.viralDatabase.create({
       data: {
         userId: publicUserId,
         videoUrl: url || `manual-${Date.now()}`,
         transcript,
-        analysis,
+        analysis: normalizedAnalysis,
       },
     });
 
@@ -390,7 +403,7 @@ export async function POST(req: Request) {
       success: true,
       cached: false,
       transcript,
-      analysis,
+        analysis: normalizedAnalysis,
       usage: {
         used: usage.used + 1,
         limit: usage.limit,
