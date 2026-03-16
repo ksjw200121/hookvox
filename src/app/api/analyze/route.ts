@@ -200,11 +200,31 @@ export async function POST(req: Request) {
       });
 
       if (existing) {
+        const existingAnalysis = (existing.analysis || {}) as Record<string, unknown>;
+        const normalizedExisting: Record<string, unknown> = {
+          ...existingAnalysis,
+        };
+        if (!normalizedExisting.hookModel) {
+          const anyExisting = existingAnalysis as any;
+          normalizedExisting.hookModel =
+            anyExisting?.hookModel ||
+            anyExisting?.hookStyle ||
+            anyExisting?.hookType ||
+            "";
+        }
+
+        if (JSON.stringify(normalizedExisting) !== JSON.stringify(existingAnalysis)) {
+          await prisma.viralDatabase.update({
+            where: { id: existing.id },
+            data: { analysis: normalizedExisting },
+          });
+        }
+
         return NextResponse.json({
           success: true,
           cached: true,
           transcript: existing.transcript || "",
-          analysis: existing.analysis || {},
+          analysis: normalizedExisting,
           usage: null,
           message: "這支影片你已經分析過，已直接讀取資料庫內容",
         });
