@@ -154,13 +154,16 @@ export async function ensurePublicUserBySupabaseId(
     (authUser.user_metadata?.picture as string | undefined) ||
     null;
 
+  const nowIso = new Date().toISOString();
   const { data: insertedUser, error: insertError } = await supabaseAdmin
     .from("users")
     .insert({
+      id: crypto.randomUUID(),
       email: fallbackEmail,
       name: fallbackName,
       avatarUrl: fallbackAvatar,
       supabaseId,
+      updatedAt: nowIso,
     })
     .select("id, email, name, avatarUrl, supabaseId")
     .single();
