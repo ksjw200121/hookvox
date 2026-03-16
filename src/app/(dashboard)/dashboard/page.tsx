@@ -31,8 +31,11 @@ export default function DashboardPage() {
   const [loading, setLoading] = useState(true)
 
   useEffect(() => {
+    let mounted = true
+
     async function loadUsage() {
       try {
+        if (!mounted) return
         const supabase = createClient()
 
         const {
@@ -71,6 +74,8 @@ export default function DashboardPage() {
           return
         }
 
+        if (!mounted) return
+
         setData({
           plan: json.plan || 'FREE',
           usage: {
@@ -92,11 +97,25 @@ export default function DashboardPage() {
       } catch (error) {
         console.error('dashboard usage fetch error:', error)
       } finally {
-        setLoading(false)
+        if (mounted) setLoading(false)
       }
     }
 
     loadUsage()
+
+    const onFocus = () => loadUsage()
+    const onVisible = () => {
+      if (document.visibilityState === 'visible') loadUsage()
+    }
+
+    window.addEventListener('focus', onFocus)
+    document.addEventListener('visibilitychange', onVisible)
+
+    return () => {
+      mounted = false
+      window.removeEventListener('focus', onFocus)
+      document.removeEventListener('visibilitychange', onVisible)
+    }
   }, [])
 
   const analyze = data.usage.analyze
