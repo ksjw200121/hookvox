@@ -3,6 +3,7 @@ import { createClient } from "@supabase/supabase-js";
 import { assertAdmin } from "@/lib/admin-auth";
 
 export const runtime = "nodejs";
+export const dynamic = "force-dynamic";
 
 type RuntimeMetricRow = {
   metric_date: string;

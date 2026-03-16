@@ -137,6 +137,14 @@ export default function DashboardLayout({
             >
               聯繫客服
             </a>
+            <a
+              href="https://www.instagram.com/fang.0721/"
+              target="_blank"
+              rel="noopener noreferrer"
+              className="hover:text-white/60 transition-colors"
+            >
+              IG
+            </a>
           </div>
         </div>
       </footer>

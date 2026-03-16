@@ -7,6 +7,7 @@ import {
 } from "@/lib/usage-checker";
 
 export const runtime = "nodejs";
+export const dynamic = "force-dynamic";
 
 function getAngleScriptLimit(plan: PlanName) {
   if (plan === "PRO" || plan === "FLAGSHIP") return 3;

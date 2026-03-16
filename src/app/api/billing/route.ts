@@ -3,6 +3,7 @@ import { createClient } from "@supabase/supabase-js";
 import { getUserIdFromRequest } from "@/lib/usage-checker";
 
 export const runtime = "nodejs";
+export const dynamic = "force-dynamic";
 
 function getSupabaseAdmin() {
   return createClient(

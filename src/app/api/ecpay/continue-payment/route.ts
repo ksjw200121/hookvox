@@ -37,6 +37,13 @@ function generateCheckMacValue(params: Record<string, string>) {
   return crypto.createHash("sha256").update(encoded).digest("hex").toUpperCase();
 }
 
+function makeMerchantTradeNo(supabaseId: string) {
+  const timePart = Date.now().toString().slice(-9);
+  const userPart = supabaseId.replace(/-/g, "").slice(0, 5);
+  const randomPart = crypto.randomBytes(2).toString("hex");
+  return `HV${timePart}${userPart}${randomPart}`.slice(0, 20);
+}
+
 function getTradeDate() {
   const now = new Date();
   const yyyy = now.getFullYear();
@@ -106,6 +113,32 @@ export async function POST(req: Request) {
     const billingCycle = String(order.billingCycle) as BillingCycle;
     const amount = Number(order.amount);
 
+    const newMerchantTradeNo = makeMerchantTradeNo(supabaseId);
+    const nowIso = new Date().toISOString();
+
+    const { error: insertErr } = await supabaseAdmin.from("orders").insert({
+      userId: publicUser.id,
+      plan,
+      billingCycle,
+      amount,
+      merchantTradeNo: newMerchantTradeNo,
+      status: "PENDING",
+      createdAt: nowIso,
+      updatedAt: nowIso,
+    });
+
+    if (insertErr) {
+      return NextResponse.json(
+        { error: "建立新付款單失敗，請稍後再試" },
+        { status: 500 }
+      );
+    }
+
+    await supabaseAdmin
+      .from("orders")
+      .update({ status: "CANCELLED", updatedAt: nowIso })
+      .eq("merchantTradeNo", merchantTradeNo);
+
     const appUrl = process.env.NEXT_PUBLIC_APP_URL!;
     const notifyUrl = process.env.ECPAY_NOTIFY_URL || `${appUrl}/api/ecpay/notify`;
     const resultUrl = `${appUrl}/api/ecpay/return`;
@@ -113,7 +146,7 @@ export async function POST(req: Request) {
 
     const params: Record<string, string> = {
       MerchantID: process.env.ECPAY_MERCHANT_ID!,
-      MerchantTradeNo: merchantTradeNo,
+      MerchantTradeNo: newMerchantTradeNo,
       MerchantTradeDate: getTradeDate(),
       PaymentType: "aio",
       TotalAmount: String(amount),
@@ -151,7 +184,7 @@ export async function POST(req: Request) {
     return NextResponse.json({
       success: true,
       paymentHtml,
-      merchantTradeNo,
+      merchantTradeNo: newMerchantTradeNo,
       amount,
     });
   } catch (error: unknown) {

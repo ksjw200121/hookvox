@@ -52,6 +52,7 @@ export default function BillingPage() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
   const [continuingId, setContinuingId] = useState<string | null>(null);
+  const [cancellingId, setCancellingId] = useState<string | null>(null);
 
   useEffect(() => {
     async function load() {
@@ -173,6 +174,46 @@ export default function BillingPage() {
     }
   }
 
+  async function handleCancelPayment(order: OrderRow) {
+    if (order.status !== "PENDING" || !order.merchantTradeNo) return;
+    setCancellingId(order.id);
+    setError("");
+    try {
+      const supabase = createClient();
+      const { data: { session } } = await supabase.auth.getSession();
+      const token = session?.access_token;
+      if (!token) {
+        setError("請先登入");
+        return;
+      }
+      const res = await fetch("/api/ecpay/cancel-order", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          Authorization: `Bearer ${token}`,
+        },
+        body: JSON.stringify({ merchantTradeNo: order.merchantTradeNo }),
+      });
+      const data = await res.json();
+      if (!res.ok) {
+        setError(data?.error || "取消訂單失敗");
+        return;
+      }
+      const billingRes = await fetch("/api/billing", {
+        headers: { Authorization: `Bearer ${token}` },
+      });
+      const billingData = await billingRes.json();
+      if (billingRes.ok) {
+        setSubscription(billingData.subscription || null);
+        setOrders(billingData.orders || []);
+      }
+    } catch {
+      setError("取消訂單時發生錯誤，請稍後再試");
+    } finally {
+      setCancellingId(null);
+    }
+  }
+
   return (
     <div className="max-w-3xl mx-auto space-y-8 animate-fade-in">
       <div>
@@ -281,7 +322,7 @@ export default function BillingPage() {
       <div className="glass rounded-2xl p-6">
         <h2 className="font-bold mb-2">付款記錄</h2>
         <p className="text-white/40 text-sm mb-4">
-          若有待付款訂單，請點擊「繼續付款」完成該筆付款；關掉付款頁後可隨時從這裡再次進入。
+          若有待付款訂單，請點擊「繼續付款」完成該筆付款；關掉付款頁後可隨時從這裡再次進入。若訂單有誤或無法付款，可點「取消付款」關閉該筆訂單後，至方案頁重新下單。
         </p>
         {loading ? (
           <div className="h-24 shimmer rounded-xl" />
@@ -325,14 +366,24 @@ export default function BillingPage() {
                   {order.status === "PAID" ? (
                     <p className="text-xs text-green-400">已付款</p>
                   ) : order.status === "PENDING" ? (
-                    <button
-                      type="button"
-                      onClick={() => handleContinuePayment(order)}
-                      disabled={!!continuingId || !order.merchantTradeNo}
-                      className="text-xs text-amber-400 hover:text-amber-300 font-medium underline disabled:opacity-50 disabled:cursor-not-allowed mt-1"
-                    >
-                      {continuingId === order.id ? "處理中..." : "繼續付款"}
-                    </button>
+                    <div className="flex flex-wrap items-center justify-end gap-x-4 gap-y-1 mt-1">
+                      <button
+                        type="button"
+                        onClick={() => handleContinuePayment(order)}
+                        disabled={!!continuingId || !!cancellingId || !order.merchantTradeNo}
+                        className="text-xs text-amber-400 hover:text-amber-300 font-medium underline disabled:opacity-50 disabled:cursor-not-allowed"
+                      >
+                        {continuingId === order.id ? "處理中..." : "繼續付款"}
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => handleCancelPayment(order)}
+                        disabled={!!continuingId || !!cancellingId}
+                        className="text-xs text-white/50 hover:text-white/70 font-medium underline disabled:opacity-50 disabled:cursor-not-allowed"
+                      >
+                        {cancellingId === order.id ? "取消中..." : "取消付款"}
+                      </button>
+                    </div>
                   ) : (
                     <p className="text-xs text-white/40">{order.status}</p>
                   )}

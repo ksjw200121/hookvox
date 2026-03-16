@@ -28,17 +28,22 @@ export default function AuthTurnstile({
   }
 
   return (
-    <div className="flex justify-center">
-      <Turnstile
-        siteKey={siteKey}
-        onSuccess={onVerify}
-        onExpire={onExpire}
-        onError={onError}
-        options={{
-          theme: "dark",
-          size: "flexible",
-        }}
-      />
+    <div className="space-y-2">
+      <div className="flex justify-center">
+        <Turnstile
+          siteKey={siteKey}
+          onSuccess={onVerify}
+          onExpire={onExpire}
+          onError={onError}
+          options={{
+            theme: "dark",
+            size: "flexible",
+          }}
+        />
+      </div>
+      <p className="text-center text-xs text-white/40">
+        若驗證無法載入或一直失敗，請確認此網址已加入 Cloudflare Turnstile 後台的網域清單。
+      </p>
     </div>
   );
 }

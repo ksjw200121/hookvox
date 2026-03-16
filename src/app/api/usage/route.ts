@@ -6,6 +6,7 @@ import {
 } from "@/lib/usage-checker";
 
 export const runtime = "nodejs";
+export const dynamic = "force-dynamic";
 
 export async function GET(req: Request) {
   try {
