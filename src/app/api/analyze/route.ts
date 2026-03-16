@@ -69,6 +69,7 @@ const ANALYSIS_SYSTEM_PROMPT = `你是短影音爆款內容分析師，熟悉台
 {
   "coreTopic": "核心在講什麼（一句話）",
   "targetAudience": "目標受眾：年齡、狀態、最大焦慮",
+  "hook": "適合作為影片第一句話的開頭 hook（請直接輸出一句話，不要說明）",
   "hookStyle": "鉤子類型（錯誤揭露型/衝突懸念型/數字震撼型/反常識型/恐懼警示型）",
   "hookScore": 8,
   "hookAnalysis": "這個開頭為什麼有效或無效",
@@ -398,12 +399,23 @@ export async function POST(req: Request) {
       ...analysis,
     };
 
+    const anyAnalysis = analysis as any;
+
     if (!normalizedAnalysis.hookModel) {
-      const anyAnalysis = analysis as any;
       normalizedAnalysis.hookModel =
         anyAnalysis?.hookModel ||
         anyAnalysis?.hookStyle ||
         anyAnalysis?.hookType ||
+        "";
+    }
+
+    if (!normalizedAnalysis.hook) {
+      normalizedAnalysis.hook =
+        anyAnalysis?.hook ||
+        anyAnalysis?.opening ||
+        (Array.isArray(anyAnalysis?.contentStructure)
+          ? anyAnalysis.contentStructure[0]
+          : "") ||
         "";
     }
 
