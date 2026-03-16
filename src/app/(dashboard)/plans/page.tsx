@@ -93,6 +93,7 @@ export default function PlansPage() {
   const [couponInput, setCouponInput] = useState('')
   const [couponApplied, setCouponApplied] = useState(false)
   const [couponError, setCouponError] = useState('')
+  const [showPendingModal, setShowPendingModal] = useState(false)
 
   useEffect(() => {
     async function loadUsage() {
@@ -174,7 +175,11 @@ export default function PlansPage() {
       const data = await res.json()
 
       if (!res.ok) {
-        alert(data?.error || '建立訂單失敗')
+        if (data?.error === '已有待付款訂單，請先完成付款或稍後再試') {
+          setShowPendingModal(true)
+        } else {
+          alert(data?.error || '建立訂單失敗')
+        }
         setLoading(false)
         return
       }
@@ -503,6 +508,32 @@ export default function PlansPage() {
               >
                 確認升級
               </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {showPendingModal && (
+        <div className="fixed inset-0 bg-black/70 backdrop-blur-sm z-50 flex items-center justify-center p-6">
+          <div className="bg-dark-800 border border-white/10 rounded-2xl p-8 max-w-md w-full">
+            <h3 className="font-bold text-xl mb-3">已有待付款訂單</h3>
+            <p className="text-white/70 text-sm leading-relaxed mb-6">
+              您有一筆尚未完成的付款。請至<strong className="text-white">帳單頁面</strong>，在付款記錄中找到「待付款」並點擊「繼續付款」完成該筆訂單。
+            </p>
+            <div className="flex gap-3">
+              <button
+                onClick={() => setShowPendingModal(false)}
+                className="flex-1 py-3 rounded-xl bg-white/10 text-white/60 font-medium text-sm hover:bg-white/15 transition-colors"
+              >
+                關閉
+              </button>
+              <Link
+                href="/billing"
+                className="flex-1 py-3 rounded-xl bg-brand-500 text-white font-bold text-sm text-center hover:bg-brand-400 transition-colors inline-flex items-center justify-center"
+                onClick={() => setShowPendingModal(false)}
+              >
+                前往帳單頁
+              </Link>
             </div>
           </div>
         </div>

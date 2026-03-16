@@ -63,7 +63,7 @@ export async function GET(req: Request) {
 
     const { data: orders, error: ordersError } = await supabaseAdmin
       .from("orders")
-      .select("id, plan, billingCycle, amount, status, createdAt, paidAt")
+      .select("id, plan, billingCycle, amount, status, createdAt, paidAt, merchantTradeNo")
       .eq("userId", publicUser.id)
       .order("createdAt", { ascending: false })
       .limit(50);
@@ -108,6 +108,7 @@ export async function GET(req: Request) {
         status: o.status,
         createdAt: o.createdAt,
         paidAt: o.paidAt ?? null,
+        merchantTradeNo: o.merchantTradeNo ?? null,
       })),
     });
   } catch (error: unknown) {

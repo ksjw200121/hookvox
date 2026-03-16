@@ -28,6 +28,7 @@ type OrderRow = {
   status: string;
   createdAt: string;
   paidAt: string | null;
+  merchantTradeNo: string | null;
 };
 
 type SubscriptionState = {
@@ -50,6 +51,7 @@ export default function BillingPage() {
   const [usage, setUsage] = useState<UsageState | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
+  const [continuingId, setContinuingId] = useState<string | null>(null);
 
   useEffect(() => {
     async function load() {
@@ -130,6 +132,46 @@ export default function BillingPage() {
 
   const isPaid = subscription?.status === "ACTIVE";
   const isExpired = subscription?.status === "EXPIRED";
+
+  async function handleContinuePayment(order: OrderRow) {
+    if (order.status !== "PENDING" || !order.merchantTradeNo) return;
+    setContinuingId(order.id);
+    try {
+      const supabase = createClient();
+      const { data: { session } } = await supabase.auth.getSession();
+      const token = session?.access_token;
+      if (!token) {
+        setError("請先登入");
+        return;
+      }
+      const res = await fetch("/api/ecpay/continue-payment", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          Authorization: `Bearer ${token}`,
+        },
+        body: JSON.stringify({ merchantTradeNo: order.merchantTradeNo }),
+      });
+      const data = await res.json();
+      if (!res.ok) {
+        setError(data?.error || "無法取得付款頁");
+        return;
+      }
+      if (!data?.paymentHtml) {
+        setError("付款資料建立失敗");
+        return;
+      }
+      const wrapper = document.createElement("div");
+      wrapper.innerHTML = data.paymentHtml;
+      document.body.appendChild(wrapper);
+      const form = wrapper.querySelector("form") as HTMLFormElement | null;
+      if (form) form.submit();
+    } catch {
+      setError("付款系統暫時無法使用，請稍後再試");
+    } finally {
+      setContinuingId(null);
+    }
+  }
 
   return (
     <div className="max-w-3xl mx-auto space-y-8 animate-fade-in">
@@ -237,7 +279,10 @@ export default function BillingPage() {
 
       {/* 帳單記錄 */}
       <div className="glass rounded-2xl p-6">
-        <h2 className="font-bold mb-4">付款記錄</h2>
+        <h2 className="font-bold mb-2">付款記錄</h2>
+        <p className="text-white/40 text-sm mb-4">
+          若有待付款訂單，請點擊「繼續付款」完成該筆付款；關掉付款頁後可隨時從這裡再次進入。
+        </p>
         {loading ? (
           <div className="h-24 shimmer rounded-xl" />
         ) : orders.length === 0 ? (
@@ -277,21 +322,20 @@ export default function BillingPage() {
                   <p className="text-sm font-bold">
                     NT$ {order.amount.toLocaleString()}
                   </p>
-                  <p
-                    className={`text-xs ${
-                      order.status === "PAID"
-                        ? "text-green-400"
-                        : order.status === "PENDING"
-                        ? "text-amber-400"
-                        : "text-white/40"
-                    }`}
-                  >
-                    {order.status === "PAID"
-                      ? "已付款"
-                      : order.status === "PENDING"
-                      ? "待付款"
-                      : order.status}
-                  </p>
+                  {order.status === "PAID" ? (
+                    <p className="text-xs text-green-400">已付款</p>
+                  ) : order.status === "PENDING" ? (
+                    <button
+                      type="button"
+                      onClick={() => handleContinuePayment(order)}
+                      disabled={!!continuingId || !order.merchantTradeNo}
+                      className="text-xs text-amber-400 hover:text-amber-300 font-medium underline disabled:opacity-50 disabled:cursor-not-allowed mt-1"
+                    >
+                      {continuingId === order.id ? "處理中..." : "繼續付款"}
+                    </button>
+                  ) : (
+                    <p className="text-xs text-white/40">{order.status}</p>
+                  )}
                 </div>
               </div>
             ))}
