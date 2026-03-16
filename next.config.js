@@ -1,7 +1,7 @@
 /** @type {import('next').NextConfig} */
 const nextConfig = {
   experimental: {
-    serverActions: { allowedOrigins: ['localhost:3000'] }
+    serverActions: { allowedOrigins: ['localhost:3000', 'https://hookvox-1yib.vercel.app'] }
   },
   images: {
     domains: ['avatars.githubusercontent.com', 'lh3.googleusercontent.com'],
