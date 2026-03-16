@@ -10,9 +10,17 @@ import {
   validateStrongPassword,
 } from "@/lib/auth-messages";
 
+function safeRedirectPath(input: string | null, fallback = "/dashboard") {
+  const v = String(input || "").trim();
+  if (!v) return fallback;
+  if (!v.startsWith("/")) return fallback;
+  if (v.startsWith("//")) return fallback;
+  return v;
+}
+
 function RegisterForm() {
   const searchParams = useSearchParams();
-  const redirectTo = searchParams.get("redirect") || "/dashboard";
+  const redirectTo = safeRedirectPath(searchParams.get("redirect"), "/dashboard");
   const loginHref = `/login?redirect=${encodeURIComponent(redirectTo)}`;
 
   const [email, setEmail] = useState("");

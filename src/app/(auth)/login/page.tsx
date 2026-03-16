@@ -7,9 +7,18 @@ import AuthTurnstile from "@/components/auth/AuthTurnstile";
 import { translateSupabaseAuthError } from "@/lib/auth-messages";
 import { useSearchParams } from "next/navigation";
 
+function safeRedirectPath(input: string | null, fallback = "/dashboard") {
+  const v = String(input || "").trim();
+  if (!v) return fallback;
+  // allow only same-origin relative paths
+  if (!v.startsWith("/")) return fallback;
+  if (v.startsWith("//")) return fallback;
+  return v;
+}
+
 function LoginForm() {
   const searchParams = useSearchParams();
-  const redirectTo = searchParams.get("redirect") || "/dashboard";
+  const redirectTo = safeRedirectPath(searchParams.get("redirect"), "/dashboard");
 
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
