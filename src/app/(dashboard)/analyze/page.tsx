@@ -335,7 +335,11 @@ export default function AnalyzePage() {
           setLoadingAnalyze(false);
           return;
         }
-        const safeName = uploadFile.name.replace(/[^a-zA-Z0-9._-]/g, "_").slice(0, 80);
+        const base = uploadFile.name.replace(/[^a-zA-Z0-9._-]/g, "_");
+        const lastDot = base.lastIndexOf(".");
+        const ext = lastDot >= 0 ? base.slice(lastDot) : "";
+        const baseName = lastDot >= 0 ? base.slice(0, lastDot) : base;
+        const safeName = (baseName.slice(0, 80 - ext.length) || "video") + (ext || ".mp4");
         const storagePath = `${session.user.id}/${Date.now()}-${safeName}`;
 
         if (uploadFile.size <= MAX_INLINE_BYTES) {
