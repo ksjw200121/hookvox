@@ -118,7 +118,8 @@ const PURPOSE_COLORS: Record<string, string> = {
 };
 
 const ACCEPTED_FILE_TYPES = ".mp3,.mp4,.m4a,.wav,.mov";
-const MAX_FILE_SIZE_MB = 50;
+// 主機單次請求約 4.5 MB，base64 會變大約 1.33 倍，故檔案上限約 3 MB
+const MAX_FILE_SIZE_MB = 3;
 const MAX_FILE_BYTES = MAX_FILE_SIZE_MB * 1024 * 1024;
 
 function copyText(text: string) {
@@ -277,7 +278,7 @@ export default function AnalyzePage() {
       return;
     }
     if (file.size > MAX_FILE_BYTES) {
-      setUploadError(`檔案太大，請上傳 ${MAX_FILE_SIZE_MB}MB 以內的檔案`);
+      setUploadError(`檔案超過 ${MAX_FILE_SIZE_MB}MB。較長影片請改用「貼上逐字稿」或 YouTube Shorts 網址分析。`);
       setUploadFile(null);
       setUploadSuccess(false);
       return;
@@ -389,7 +390,12 @@ export default function AnalyzePage() {
         setSavedNotice("這支影片你之前已分析過，已直接讀取舊資料。");
       }
     } catch (err: any) {
-      setError(err?.message || "分析失敗");
+      const msg = err?.message || "分析失敗";
+      if (typeof msg === "string" && (msg.includes("Request Entity Too Large") || msg.includes("PAYLOAD_TOO_LARGE"))) {
+        setError("檔案過大，主機無法處理。請上傳 3MB 以內的影片/音訊，或改用「貼上逐字稿」/ YouTube Shorts 網址。");
+      } else {
+        setError(msg);
+      }
     } finally {
       setLoadingAnalyze(false);
     }
@@ -615,7 +621,7 @@ export default function AnalyzePage() {
               <div>
                 <FieldBlock
                   label="上傳音訊或影片"
-                  hint="支援 mp3 / mp4 / m4a / wav / mov，檔案上限 50MB。上傳完成後請按「開始爆款分析」進行轉錄與分析。"
+                  hint="支援 mp3 / mp4 / m4a / wav / mov，單檔上限 3MB（較長影片請用「貼逐字稿」或 YouTube Shorts）。上傳後按「開始爆款分析」。"
                 >
                   <input
                     ref={fileInputRef}
@@ -662,7 +668,7 @@ export default function AnalyzePage() {
                         <div style={{ fontSize: 32, marginBottom: 8 }}>🎵</div>
                         <div style={{ color: "#888", fontSize: 14 }}>點擊選擇檔案</div>
                         <div style={{ color: "#444", fontSize: 12, marginTop: 6 }}>
-                          mp3 / mp4 / m4a / wav / mov，最大 50MB
+                          mp3 / mp4 / m4a / wav / mov，最大 3MB
                         </div>
                       </div>
                     )}
