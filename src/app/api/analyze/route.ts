@@ -274,20 +274,36 @@ export async function POST(req: Request) {
         }
 
         const buffer = Buffer.from(await blob.arrayBuffer());
-        const ext = storagePath.split(".").pop()?.toLowerCase() || "mp4";
-        if (!isWhisperSupportedExt(ext)) {
+        const filename = storagePath.replace(/\\/g, "/").split("/").pop() || "";
+        const ext = (filename && filename.includes(".")) ? filename.split(".").pop()!.toLowerCase() : "mp4";
+        const knownUnsupported = ["mov", "avi", "mkv", "wmv"];
+        if (ext && knownUnsupported.includes(ext)) {
           return NextResponse.json(
-            { error: `不支援的檔案格式。請使用：${WHISPER_SUPPORTED_EXT.join(", ")}。.mov 請先轉成 mp4。` },
+            { error: `不支援的檔案格式 .${ext}，請先轉成 mp4 再上傳。` },
             { status: 400 }
           );
         }
-        const mimeType = ext === "mp3" || ext === "m4a" ? "audio/mpeg" : "video/mp4";
-        const uploadedFile = await toFile(buffer, `audio.${ext}`, { type: mimeType });
+        const safeExt = isWhisperSupportedExt(ext) ? ext : "mp4";
+        const mimeType = safeExt === "mp3" || safeExt === "m4a" ? "audio/mpeg" : "video/mp4";
+        const uploadedFile = await toFile(buffer, `input.${safeExt}`, { type: mimeType });
 
-        const transcription = await openai.audio.transcriptions.create({
-          file: uploadedFile,
-          model: "whisper-1",
-        });
+        let transcription: { text?: string | null };
+        try {
+          transcription = await openai.audio.transcriptions.create({
+            file: uploadedFile,
+            model: "whisper-1",
+          });
+        } catch (whisperErr: unknown) {
+          await supabaseAdmin.storage.from(ANALYZE_UPLOADS_BUCKET).remove([storagePath]);
+          const msg = (whisperErr as Error)?.message || "";
+          if (msg.includes("Invalid file format") || msg.includes("unsupported format")) {
+            return NextResponse.json(
+              { error: "此檔案無法轉錄，請確認是 mp3 / mp4 / m4a / wav 等格式，且檔案未損壞。.mov 請先轉成 mp4。" },
+              { status: 400 }
+            );
+          }
+          throw whisperErr;
+        }
 
         transcript = transcription.text?.trim() || "";
 
