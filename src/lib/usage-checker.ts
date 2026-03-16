@@ -169,6 +169,26 @@ export async function ensurePublicUserBySupabaseId(
     .single();
 
   if (insertError) {
+    // 同 email 已存在（例如重辦帳號）：改為綁定該列到目前登入的 auth
+    const isDuplicateEmail =
+      insertError.code === "23505" ||
+      String(insertError.message || "").includes("users_email_key");
+    if (isDuplicateEmail && fallbackEmail) {
+      const { data: existingByEmail, error: fetchErr } = await supabaseAdmin
+        .from("users")
+        .select("id, email, name, avatarUrl, supabaseId")
+        .eq("email", fallbackEmail)
+        .maybeSingle();
+      if (!fetchErr && existingByEmail) {
+        const { data: updated, error: updateErr } = await supabaseAdmin
+          .from("users")
+          .update({ supabaseId, updatedAt: nowIso })
+          .eq("id", existingByEmail.id)
+          .select("id, email, name, avatarUrl, supabaseId")
+          .single();
+        if (!updateErr && updated) return updated as UserRow;
+      }
+    }
     throw new Error(`Failed to create user: ${insertError.message}`);
   }
 
