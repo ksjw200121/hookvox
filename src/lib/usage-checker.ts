@@ -241,6 +241,15 @@ async function ensureSubscriptionByInternalUserId(
         .eq("userId", internalUserId)
         .maybeSingle();
       if (!retryErr && row) return row as SubscriptionRow;
+      // 已有列但 SELECT 未命中（例如欄位型別差異）：回傳預設 FREE，避免整支 API 拋錯
+      return {
+        id: "",
+        userId: internalUserId,
+        plan: "FREE",
+        status: "ACTIVE",
+        startDate: now,
+        endDate: null,
+      } as SubscriptionRow;
     }
     throw new Error(`Failed to create subscription: ${insertError.message}`);
   }
