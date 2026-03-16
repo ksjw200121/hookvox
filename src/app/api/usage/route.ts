@@ -8,6 +8,24 @@ import {
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
 
+const emptyUsage = {
+  analyze: {
+    used: 0,
+    limit: 0,
+    remaining: 0,
+    cycleStart: null as string | null,
+    cycleEnd: null as string | null,
+  },
+  generate: {
+    used: 0,
+    limit: 0,
+    remaining: 0,
+    cycleStart: null as string | null,
+    cycleEnd: null as string | null,
+  },
+  week: { analyze: 0, generate: 0 },
+};
+
 export async function GET(req: Request) {
   try {
     const userId = await getUserIdFromRequest(req);
@@ -48,10 +66,15 @@ export async function GET(req: Request) {
   } catch (error: unknown) {
     const err = error as Error;
     console.error("usage api error:", err);
-
-    return NextResponse.json(
-      { error: err?.message || "伺服器錯誤" },
-      { status: 500 }
-    );
+    // 仍回傳 200 + 預設額度，避免帳單頁「無法載入額度」
+    return NextResponse.json({
+      plan: "FREE",
+      usage: {
+        ...emptyUsage,
+        analyze: { ...emptyUsage.analyze },
+        generate: { ...emptyUsage.generate },
+      },
+      _error: err?.message || "伺服器錯誤",
+    });
   }
 }
