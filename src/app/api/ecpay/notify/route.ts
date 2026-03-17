@@ -91,6 +91,7 @@ async function logWebhookEvent(
   const rtnCode = body.RtnCode || null;
 
   const insertPayload: Record<string, unknown> = {
+    id: crypto.randomUUID(),
     provider: "ECPAY",
     ok: meta.ok,
     stage: meta.stage,
@@ -106,7 +107,11 @@ async function logWebhookEvent(
     created_at: new Date().toISOString(),
   };
 
-  await supabaseAdmin.from("payment_webhook_events").insert(insertPayload);
+  try {
+    await supabaseAdmin.from("payment_webhook_events").insert(insertPayload);
+  } catch {
+    // Never block payment processing due to audit logging failures
+  }
 }
 
 export async function POST(req: Request) {
