@@ -343,8 +343,8 @@ async function getUserContext(supabaseId: string): Promise<{
 
   const subscription = await normalizeSubscriptionState(rawSubscription);
 
-  const statusNormalized = String(subscription.status || "").toUpperCase();
-  const planNormalized = String(subscription.plan || "FREE").toUpperCase() as PlanName;
+  const statusNormalized = String(subscription.status || "").trim().toUpperCase();
+  const planNormalized = String(subscription.plan || "FREE").trim().toUpperCase() as PlanName;
 
   const plan: PlanName =
     statusNormalized === "ACTIVE" &&
@@ -377,8 +377,8 @@ export async function getPlanForSupabaseIdSafe(supabaseId: string): Promise<Plan
       .eq("userId", publicUser.id)
       .maybeSingle();
     if (error || !sub) return "FREE";
-    const plan = String(sub.plan || "FREE").toUpperCase() as PlanName;
-    const status = String(sub.status || "");
+    const plan = String(sub.plan || "FREE").trim().toUpperCase() as PlanName;
+    const status = String(sub.status || "").trim().toUpperCase();
     const endDate = sub.endDate ? new Date(sub.endDate) : null;
     if (endDate && !Number.isNaN(endDate.getTime()) && endDate <= new Date())
       return "FREE";
