@@ -253,17 +253,20 @@ export async function POST(req: Request) {
       .eq("userId", publicUser.id)
       .maybeSingle();
 
-    if (subError || !subscription?.id) {
+    if (subError) {
       await logWebhookEvent(supabaseAdmin, req, body, {
         ok: false,
         stage: "LOAD_SUBSCRIPTION",
-        message: "找不到訂閱資料",
+        message: subError.message,
         checkMacValid: true,
       });
-      return new Response("0|找不到訂閱資料", { status: 400 });
+      return new Response("0|讀取訂閱資料失敗", { status: 500 });
     }
 
-    const currentPlan = String(subscription.plan || "FREE").toUpperCase() as CurrentPlanName;
+    // 新註冊用戶可能還沒有 subscriptions 列（以前只有在 usage 時才會建立）。
+    // 付款成功時要能自動補上，否則會出現「交易完成但帳單仍未生效」。
+    const hasSubscription = Boolean(subscription?.id);
+    const currentPlan = String(subscription?.plan || "FREE").toUpperCase() as CurrentPlanName;
 
     if (PLAN_LEVEL[plan] < PLAN_LEVEL[currentPlan]) {
       await logWebhookEvent(supabaseAdmin, req, body, {
@@ -312,22 +315,51 @@ export async function POST(req: Request) {
       updatePayload.endDate = addMonths(now, months).toISOString();
     }
 
-    const { error: updateSubscriptionError } = await supabaseAdmin
-      .from("subscriptions")
-      .update(updatePayload)
-      .eq("id", subscription.id);
+    if (hasSubscription) {
+      const { error: updateSubscriptionError } = await supabaseAdmin
+        .from("subscriptions")
+        .update(updatePayload)
+        .eq("id", subscription!.id);
 
-    if (updateSubscriptionError) {
-      await logWebhookEvent(supabaseAdmin, req, body, {
-        ok: false,
-        stage: "UPDATE_SUBSCRIPTION",
-        message: updateSubscriptionError.message,
-        checkMacValid: true,
-      });
-      return new Response(
-        `0|更新訂閱失敗:${updateSubscriptionError.message}`,
-        { status: 500 }
-      );
+      if (updateSubscriptionError) {
+        await logWebhookEvent(supabaseAdmin, req, body, {
+          ok: false,
+          stage: "UPDATE_SUBSCRIPTION",
+          message: updateSubscriptionError.message,
+          checkMacValid: true,
+        });
+        return new Response(
+          `0|更新訂閱失敗:${updateSubscriptionError.message}`,
+          { status: 500 }
+        );
+      }
+    } else {
+      const { error: insertSubscriptionError } = await supabaseAdmin
+        .from("subscriptions")
+        .insert({
+          userId: publicUser.id,
+          plan,
+          status: "ACTIVE",
+          ecpayTradeNo: tradeNo,
+          ecpayMerchantTradeNo: merchantTradeNo,
+          startDate: (updatePayload.startDate as string) || updateTime,
+          endDate: (updatePayload.endDate as string) || null,
+          createdAt: updateTime,
+          updatedAt: updateTime,
+        });
+
+      if (insertSubscriptionError) {
+        await logWebhookEvent(supabaseAdmin, req, body, {
+          ok: false,
+          stage: "INSERT_SUBSCRIPTION",
+          message: insertSubscriptionError.message,
+          checkMacValid: true,
+        });
+        return new Response(
+          `0|建立訂閱失敗:${insertSubscriptionError.message}`,
+          { status: 500 }
+        );
+      }
     }
 
     const { error: updateOrderError } = await supabaseAdmin

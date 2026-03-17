@@ -93,6 +93,33 @@ export async function POST(req: Request) {
       return NextResponse.json({ error: "找不到使用者" }, { status: 400 });
     }
 
+    // 新註冊用戶可能還沒有 subscriptions 列：先補一列，避免 webhook 因找不到訂閱而無法入帳
+    const { data: subRow, error: subErr } = await supabaseAdmin
+      .from("subscriptions")
+      .select("id")
+      .eq("userId", publicUser.id)
+      .maybeSingle();
+    if (subErr) {
+      return NextResponse.json({ error: `讀取訂閱失敗: ${subErr.message}` }, { status: 500 });
+    }
+    if (!subRow?.id) {
+      const nowIso = new Date().toISOString();
+      const { error: insertSubErr } = await supabaseAdmin.from("subscriptions").insert({
+        userId: publicUser.id,
+        plan: "FREE",
+        status: "ACTIVE",
+        startDate: nowIso,
+        createdAt: nowIso,
+        updatedAt: nowIso,
+      });
+      if (insertSubErr) {
+        return NextResponse.json(
+          { error: `建立訂閱失敗: ${insertSubErr.message}` },
+          { status: 500 }
+        );
+      }
+    }
+
     const { data: order, error: orderError } = await supabaseAdmin
       .from("orders")
       .select("id, userId, plan, billingCycle, amount, merchantTradeNo, status")
@@ -138,6 +165,11 @@ export async function POST(req: Request) {
       .from("orders")
       .update({ status: "CANCELLED", updatedAt: nowIso })
       .eq("merchantTradeNo", merchantTradeNo);
+
+    await supabaseAdmin
+      .from("subscriptions")
+      .update({ ecpayMerchantTradeNo: newMerchantTradeNo, updatedAt: nowIso })
+      .eq("userId", publicUser.id);
 
     const appUrl = process.env.NEXT_PUBLIC_APP_URL!;
     const notifyUrl = process.env.ECPAY_NOTIFY_URL || `${appUrl}/api/ecpay/notify`;
