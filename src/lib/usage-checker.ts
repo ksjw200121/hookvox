@@ -397,6 +397,7 @@ export function getActionGroup(action: string): UsageFeature | null {
   if (action === "ANALYZE") return "ANALYZE";
 
   if (
+    action === "GENERATE" ||
     action === "GENERATE_SCRIPT" ||
     action === "GENERATE_TITLES" ||
     action === "GENERATE_IDEAS"
@@ -405,6 +406,131 @@ export function getActionGroup(action: string): UsageFeature | null {
   }
 
   return null;
+}
+
+export type UsageSnapshot = {
+  plan: PlanName;
+  usage: {
+    analyze: {
+      used: number;
+      limit: number;
+      remaining: number;
+      cycleStart: string | null;
+      cycleEnd: string | null;
+    };
+    generate: {
+      used: number;
+      limit: number;
+      remaining: number;
+      cycleStart: string | null;
+      cycleEnd: string | null;
+    };
+    week: { analyze: number; generate: number };
+  };
+};
+
+/**
+ * 單一來源的方案/額度快照（與 billing 同源的 subscriptions）。
+ * 用於 /api/usage，避免不同頁面顯示的方案不一致。
+ */
+export async function getUsageSnapshotForSupabaseId(
+  supabaseId: string
+): Promise<UsageSnapshot> {
+  const supabaseAdmin = getSupabaseAdmin();
+
+  // 對齊 public.users（同 email 會 re-link），再用 internal userId 查 subscriptions
+  const publicUser = await ensurePublicUserBySupabaseId(supabaseId);
+  const internalUserId = publicUser?.id || null;
+
+  let subscription: SubscriptionRow | null = null;
+  if (internalUserId) {
+    subscription = await getSubscriptionReadOnly(internalUserId);
+    if (subscription) {
+      subscription = await normalizeSubscriptionState(subscription);
+    }
+  }
+
+  const status = String(subscription?.status || "").trim().toUpperCase();
+  const planRaw = String(subscription?.plan || "FREE").trim().toUpperCase();
+  const endDate = subscription?.endDate ? new Date(subscription.endDate) : null;
+  const isExpired =
+    endDate && !Number.isNaN(endDate.getTime()) && endDate <= new Date();
+
+  const plan: PlanName =
+    !isExpired &&
+    status === "ACTIVE" &&
+    (planRaw === "CREATOR" || planRaw === "PRO" || planRaw === "FLAGSHIP")
+      ? (planRaw as PlanName)
+      : "FREE";
+
+  const { cycleStart, cycleEnd } = getCurrentCycleWindow(
+    subscription?.startDate ?? null
+  );
+
+  const weekStart = new Date();
+  weekStart.setDate(weekStart.getDate() - 7);
+  const weekStartIso = weekStart.toISOString();
+
+  const [{ data: cycleLogs, error: cycleErr }, { data: weekLogs, error: weekErr }] =
+    await Promise.all([
+      supabaseAdmin
+        .from("usage_logs")
+        .select("action, createdAt")
+        .eq("userId", supabaseId)
+        .gte("createdAt", cycleStart)
+        .lt("createdAt", cycleEnd),
+      supabaseAdmin
+        .from("usage_logs")
+        .select("action, createdAt")
+        .eq("userId", supabaseId)
+        .gte("createdAt", weekStartIso),
+    ]);
+
+  if (cycleErr) {
+    throw new Error(`Failed to check usage: ${cycleErr.message}`);
+  }
+  if (weekErr) {
+    throw new Error(`Failed to check week usage: ${weekErr.message}`);
+  }
+
+  const usedAnalyze =
+    (cycleLogs || []).filter((row: any) => getActionGroup(row.action) === "ANALYZE")
+      .length || 0;
+  const usedGenerate =
+    (cycleLogs || []).filter((row: any) => getActionGroup(row.action) === "GENERATE")
+      .length || 0;
+
+  let weekAnalyze = 0;
+  let weekGenerate = 0;
+  for (const row of weekLogs || []) {
+    const group = getActionGroup((row as any).action);
+    if (group === "ANALYZE") weekAnalyze += 1;
+    if (group === "GENERATE") weekGenerate += 1;
+  }
+
+  const analyzeLimit = LIMITS[plan].ANALYZE;
+  const generateLimit = LIMITS[plan].GENERATE;
+
+  return {
+    plan,
+    usage: {
+      analyze: {
+        used: usedAnalyze,
+        limit: analyzeLimit,
+        remaining: Math.max(analyzeLimit - usedAnalyze, 0),
+        cycleStart,
+        cycleEnd,
+      },
+      generate: {
+        used: usedGenerate,
+        limit: generateLimit,
+        remaining: Math.max(generateLimit - usedGenerate, 0),
+        cycleStart,
+        cycleEnd,
+      },
+      week: { analyze: weekAnalyze, generate: weekGenerate },
+    },
+  };
 }
 
 export async function checkUsageLimit(
