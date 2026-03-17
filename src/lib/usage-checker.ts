@@ -534,13 +534,13 @@ export async function getUsageSnapshotForSupabaseId(
   const isExpired =
     endDate && !Number.isNaN(endDate.getTime()) && endDate <= new Date();
 
-  // 避免「幽靈付費」：subscription 顯示付費，但實際沒有任何付款證據（PAID 訂單 / ecpayTradeNo）
+  // 若 subscription.status 是 ACTIVE 的付費方案就直接信任
+  // （ecpayTradeNo 檢查已移除：billing self-heal 寫入時不一定帶 tradeNo，多餘條件反而造成 usage 誤判為 FREE）
   const isPaidPlan =
     planRaw === "CREATOR" || planRaw === "PRO" || planRaw === "FLAGSHIP";
-  const hasPaymentEvidence =
-    Boolean((subscription as any)?.ecpayTradeNo) || Boolean(paidPlanFromOrders);
+  const isExplicitlyInactive = status === "CANCELLED" || status === "EXPIRED";
   const planFromSubscription: PlanName =
-    !isExpired && isPaidPlan && hasPaymentEvidence ? (planRaw as PlanName) : "FREE";
+    !isExpired && isPaidPlan && !isExplicitlyInactive ? (planRaw as PlanName) : "FREE";
 
   // 升級情境：若最新 PAID 訂單方案更高，就以訂單為準（避免付款成功但方案卡在舊的）
   const plan: PlanName =
