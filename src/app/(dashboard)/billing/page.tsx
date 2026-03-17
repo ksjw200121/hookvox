@@ -125,24 +125,40 @@ export default function BillingPage() {
         FREE: 3, CREATOR: 50, PRO: 200, FLAGSHIP: 500,
       };
       const correctLimit = PLAN_LIMITS[effectivePlan] ?? 3;
+      const analyzeUsed = usageData?.usage?.analyze?.used ?? 0;
+      const generateUsed = usageData?.usage?.generate?.used ?? 0;
+      const usageState = {
+        analyze: {
+          used: analyzeUsed,
+          limit: correctLimit,
+          remaining: Math.max(0, correctLimit - analyzeUsed),
+        },
+        generate: {
+          used: generateUsed,
+          limit: correctLimit,
+          remaining: Math.max(0, correctLimit - generateUsed),
+        },
+        cycleEnd: usageData?.usage?.analyze?.cycleEnd ?? null,
+      };
       if (usageRes.ok && usageData?.usage) {
-        const analyzeUsed = usageData.usage.analyze?.used ?? 0;
-        const generateUsed = usageData.usage.generate?.used ?? 0;
-        setUsage({
-          analyze: {
-            used: analyzeUsed,
-            limit: correctLimit,
-            remaining: Math.max(0, correctLimit - analyzeUsed),
-          },
-          generate: {
-            used: generateUsed,
-            limit: correctLimit,
-            remaining: Math.max(0, correctLimit - generateUsed),
-          },
-          cycleEnd: usageData.usage.analyze?.cycleEnd ?? null,
-        });
+        setUsage(usageState);
       } else {
         setUsage(null);
+      }
+
+      // 廣播最新 plan 和 usage 給控制台、方案頁（避免切頁後顯示舊 state）
+      if (effectivePlan !== "FREE") {
+        window.dispatchEvent(
+          new CustomEvent(USAGE_UPDATED_EVENT, {
+            detail: {
+              plan: effectivePlan,
+              usage: {
+                analyze: usageState.analyze,
+                generate: usageState.generate,
+              },
+            } satisfies UsageUpdatedDetail,
+          })
+        );
       }
     } catch (e) {
       setError("載入失敗，請稍後再試");

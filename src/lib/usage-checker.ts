@@ -529,22 +529,44 @@ export async function getUsageSnapshotForSupabaseId(
       ? paidPlanFromOrders
       : planFromSubscription;
 
-  // best-effort: 自動把 subscriptions.plan 升到已付款訂單的方案（避免下一次又打架）
-  if (
-    subscription?.id &&
-    paidPlanFromOrders &&
-    PLAN_LEVEL[paidPlanFromOrders] >
-      PLAN_LEVEL[String(subscription.plan || "FREE").trim().toUpperCase() as PlanName]
-  ) {
+  // best-effort: 以 PAID 訂單同步 subscription（升級或建立）
+  if (paidPlanFromOrders && PLAN_LEVEL[paidPlanFromOrders] > PLAN_LEVEL[planFromSubscription]) {
     const nowIso = new Date().toISOString();
-    const updatePayload: Record<string, unknown> = {
-      plan: paidPlanFromOrders,
-      status: "ACTIVE",
-      updatedAt: nowIso,
-    };
-    if (paidTradeNo) updatePayload.ecpayTradeNo = paidTradeNo;
-    if (paidMerchantTradeNo) updatePayload.ecpayMerchantTradeNo = paidMerchantTradeNo;
-    await supabaseAdmin.from("subscriptions").update(updatePayload).eq("id", subscription.id);
+    let cycleEndForSub: string | null = null;
+    if (paidAtAnchor) {
+      const anchor = new Date(paidAtAnchor);
+      if (!Number.isNaN(anchor.getTime())) {
+        const end = new Date(anchor);
+        end.setMonth(end.getMonth() + 1);
+        cycleEndForSub = end.toISOString();
+      }
+    }
+    if (subscription?.id) {
+      // 更新現有 subscription
+      const updatePayload: Record<string, unknown> = {
+        plan: paidPlanFromOrders,
+        status: "ACTIVE",
+        updatedAt: nowIso,
+      };
+      if (paidTradeNo) updatePayload.ecpayTradeNo = paidTradeNo;
+      if (paidMerchantTradeNo) updatePayload.ecpayMerchantTradeNo = paidMerchantTradeNo;
+      if (cycleEndForSub) updatePayload.endDate = cycleEndForSub;
+      await supabaseAdmin.from("subscriptions").update(updatePayload).eq("id", subscription.id);
+    } else if (internalUserId) {
+      // 建立新 subscription（billing 來不及 self-heal 時由 usage 補建）
+      await supabaseAdmin.from("subscriptions").insert({
+        id: crypto.randomUUID(),
+        userId: internalUserId,
+        plan: paidPlanFromOrders,
+        status: "ACTIVE",
+        startDate: paidAtAnchor || nowIso,
+        endDate: cycleEndForSub,
+        ecpayTradeNo: paidTradeNo || null,
+        ecpayMerchantTradeNo: paidMerchantTradeNo || null,
+        createdAt: nowIso,
+        updatedAt: nowIso,
+      });
+    }
   }
 
   const { cycleStart, cycleEnd } = getCurrentCycleWindow(
