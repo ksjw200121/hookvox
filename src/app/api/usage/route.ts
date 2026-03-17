@@ -16,7 +16,7 @@ export async function GET(req: Request) {
     }
 
     const snapshot = await getUsageSnapshotForSupabaseId(userId);
-    return NextResponse.json(snapshot);
+    return NextResponse.json({ ...snapshot, version: "usage-snapshot-v3" });
   } catch (error: unknown) {
     const err = error as Error;
     console.error("usage api error:", err);
@@ -28,6 +28,7 @@ export async function GET(req: Request) {
         week: { analyze: 0, generate: 0 },
       },
       _error: err?.message || "伺服器錯誤",
+      version: "usage-snapshot-v3",
     });
   }
 }

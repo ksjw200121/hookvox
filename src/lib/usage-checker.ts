@@ -437,13 +437,33 @@ export async function getUsageSnapshotForSupabaseId(
 
   // 對齊 public.users（同 email 會 re-link），再用 internal userId 查 subscriptions
   const publicUser = await ensurePublicUserBySupabaseId(supabaseId);
-  const internalUserId = publicUser?.id || null;
+  let internalUserId = publicUser?.id || null;
 
   let subscription: SubscriptionRow | null = null;
   if (internalUserId) {
     subscription = await getSubscriptionReadOnly(internalUserId);
     if (subscription) {
       subscription = await normalizeSubscriptionState(subscription);
+    }
+  }
+  // 若仍找不到訂閱：再用 auth email 對齊一次（避免 users.supabaseId 映射在特殊情況下不同步）
+  if (!subscription) {
+    const authUser = await getAuthUserFromSupabaseId(supabaseId);
+    const email = (authUser?.email || "").trim().toLowerCase();
+    if (email) {
+      const { data: byEmail } = await supabaseAdmin
+        .from("users")
+        .select("id")
+        .eq("email", email)
+        .maybeSingle();
+      const emailUserId = (byEmail as any)?.id ? String((byEmail as any).id) : null;
+      if (emailUserId && emailUserId !== internalUserId) {
+        internalUserId = emailUserId;
+        subscription = await getSubscriptionReadOnly(internalUserId);
+        if (subscription) {
+          subscription = await normalizeSubscriptionState(subscription);
+        }
+      }
     }
   }
 
