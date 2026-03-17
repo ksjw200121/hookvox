@@ -41,6 +41,8 @@ type SubscriptionRow = {
   userId: string;
   plan: PlanName;
   status: string;
+  ecpayTradeNo?: string | null;
+  ecpayMerchantTradeNo?: string | null;
   startDate?: string | null;
   endDate?: string | null;
 };
@@ -202,7 +204,7 @@ async function ensureSubscriptionByInternalUserId(
 
   const { data: existingSubscription, error: selectError } = await supabaseAdmin
     .from("subscriptions")
-    .select("id, userId, plan, status, startDate, endDate")
+    .select("id, userId, plan, status, ecpayTradeNo, ecpayMerchantTradeNo, startDate, endDate")
     .eq("userId", internalUserId)
     .maybeSingle();
 
@@ -227,7 +229,7 @@ async function ensureSubscriptionByInternalUserId(
       createdAt: now,
       updatedAt: now,
     })
-    .select("id, userId, plan, status, startDate, endDate")
+    .select("id, userId, plan, status, ecpayTradeNo, ecpayMerchantTradeNo, startDate, endDate")
     .single();
 
   if (insertError) {
@@ -237,7 +239,7 @@ async function ensureSubscriptionByInternalUserId(
     if (isDuplicateUserId) {
       const { data: row, error: retryErr } = await supabaseAdmin
         .from("subscriptions")
-        .select("id, userId, plan, status, startDate, endDate")
+        .select("id, userId, plan, status, ecpayTradeNo, ecpayMerchantTradeNo, startDate, endDate")
         .eq("userId", internalUserId)
         .maybeSingle();
       if (!retryErr && row) return row as SubscriptionRow;
@@ -264,7 +266,7 @@ async function getSubscriptionReadOnly(
   const supabaseAdmin = getSupabaseAdmin();
   const { data, error } = await supabaseAdmin
     .from("subscriptions")
-    .select("id, userId, plan, status, startDate, endDate")
+    .select("id, userId, plan, status, ecpayTradeNo, ecpayMerchantTradeNo, startDate, endDate")
     .eq("userId", internalUserId)
     .maybeSingle();
   if (error || !data) return null;
@@ -303,7 +305,7 @@ async function normalizeSubscriptionState(
       updatedAt: updateTime,
     })
     .eq("id", subscription.id)
-    .select("id, userId, plan, status, startDate, endDate")
+    .select("id, userId, plan, status, ecpayTradeNo, ecpayMerchantTradeNo, startDate, endDate")
     .single();
 
   if (error || !updatedSubscription) {
@@ -349,7 +351,9 @@ async function getUserContext(supabaseId: string): Promise<{
   const isPaidPlan =
     planNormalized === "CREATOR" || planNormalized === "PRO" || planNormalized === "FLAGSHIP";
   const isExplicitlyInactive = statusNormalized === "EXPIRED" || statusNormalized === "CANCELLED";
-  const plan: PlanName = isPaidPlan && !isExplicitlyInactive ? planNormalized : "FREE";
+  const hasPaymentEvidence = Boolean((subscription as any)?.ecpayTradeNo);
+  const plan: PlanName =
+    isPaidPlan && !isExplicitlyInactive && hasPaymentEvidence ? planNormalized : "FREE";
 
   return {
     supabaseId,
@@ -499,11 +503,13 @@ export async function getUsageSnapshotForSupabaseId(
   const isExpired =
     endDate && !Number.isNaN(endDate.getTime()) && endDate <= new Date();
 
-  // 與帳單顯示對齊：只要是付費方案且未過期，就視為有效（不再讓 status 造成誤判）
+  // 避免「幽靈付費」：subscription 顯示付費，但實際沒有任何付款證據（PAID 訂單 / ecpayTradeNo）
   const isPaidPlan =
     planRaw === "CREATOR" || planRaw === "PRO" || planRaw === "FLAGSHIP";
+  const hasPaymentEvidence =
+    Boolean((subscription as any)?.ecpayTradeNo) || Boolean(paidPlanFromOrders);
   const plan: PlanName =
-    !isExpired && isPaidPlan
+    !isExpired && isPaidPlan && hasPaymentEvidence
       ? (planRaw as PlanName)
       : paidPlanFromOrders
         ? paidPlanFromOrders

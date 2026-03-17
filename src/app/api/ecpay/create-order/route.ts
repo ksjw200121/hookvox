@@ -138,7 +138,7 @@ export async function POST(req: Request) {
 
     const { data: subscription, error: subscriptionError } = await supabaseAdmin
       .from("subscriptions")
-      .select("id, plan, status, endDate")
+      .select("id, plan, status, endDate, ecpayTradeNo")
       .eq("userId", publicUser.id)
       .maybeSingle();
 
@@ -171,17 +171,47 @@ export async function POST(req: Request) {
 
     let currentPlan: CurrentPlanName = "FREE";
 
-    if (subscription?.status === "ACTIVE") {
-      const rawPlan = String(subscription.plan || "FREE").toUpperCase() as CurrentPlanName;
-      currentPlan = ["FREE", "CREATOR", "PRO", "FLAGSHIP"].includes(rawPlan)
-        ? rawPlan
-        : "FREE";
+    // Prefer paid orders as the source of truth. Avoid "ghost paid" subscription states.
+    const { data: paidOrder } = await supabaseAdmin
+      .from("orders")
+      .select("plan, status, paidAt, createdAt")
+      .eq("userId", publicUser.id)
+      .in("status", ["PAID", "SUCCESS"])
+      .order("paidAt", { ascending: false, nullsFirst: false })
+      .order("createdAt", { ascending: false })
+      .limit(1)
+      .maybeSingle();
 
-      if (subscription.endDate) {
-        const endDate = new Date(subscription.endDate);
-        if (!Number.isNaN(endDate.getTime()) && new Date() > endDate) {
-          currentPlan = "FREE";
+    const paidPlan = String((paidOrder as any)?.plan || "").trim().toUpperCase() as CurrentPlanName;
+    const hasPaidOrder =
+      paidPlan === "CREATOR" || paidPlan === "PRO" || paidPlan === "FLAGSHIP";
+
+    if (hasPaidOrder) {
+      currentPlan = paidPlan;
+    } else if (subscription?.status === "ACTIVE") {
+      const rawPlan = String(subscription.plan || "FREE").toUpperCase() as CurrentPlanName;
+      const isPaid =
+        rawPlan === "CREATOR" || rawPlan === "PRO" || rawPlan === "FLAGSHIP";
+      const hasEvidence = Boolean((subscription as any)?.ecpayTradeNo);
+
+      if (isPaid && hasEvidence) {
+        currentPlan = rawPlan;
+        if (subscription.endDate) {
+          const endDate = new Date(subscription.endDate);
+          if (!Number.isNaN(endDate.getTime()) && new Date() > endDate) {
+            currentPlan = "FREE";
+          }
         }
+      } else {
+        // Self-heal: subscription says paid but no evidence (no PAID order and no ecpayTradeNo)
+        if (isPaid && subscription?.id) {
+          const nowIso = new Date().toISOString();
+          await supabaseAdmin
+            .from("subscriptions")
+            .update({ plan: "FREE", status: "ACTIVE", updatedAt: nowIso })
+            .eq("id", subscription.id);
+        }
+        currentPlan = "FREE";
       }
     }
 
