@@ -5,12 +5,16 @@ begin;
 
 update subscriptions
 set
-  plan = upper(trim(plan)),
-  status = upper(trim(status)),
+  -- plan/status 可能是 enum（例如 "Plan" / "SubStatus"），先轉成 text 再 trim/upper，最後再 cast 回 enum
+  plan = upper(trim(plan::text))::"Plan",
+  status = upper(trim(status::text))::"SubStatus",
   "updatedAt" = now()
 where
   plan is not null
-  and (plan <> upper(trim(plan)) or status <> upper(trim(status)));
+  and (
+    plan::text <> upper(trim(plan::text))
+    or status::text <> upper(trim(status::text))
+  );
 
 commit;
 
