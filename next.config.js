@@ -1,3 +1,5 @@
+const { withSentryConfig } = require('@sentry/nextjs')
+
 /** @type {import('next').NextConfig} */
 const nextConfig = {
   experimental: {
@@ -14,7 +16,7 @@ const nextConfig = {
       "style-src 'self' 'unsafe-inline'",
       "script-src 'self' 'unsafe-inline' 'unsafe-eval' https://challenges.cloudflare.com",
       "frame-src https://challenges.cloudflare.com",
-      "connect-src 'self' https://*.supabase.co wss://*.supabase.co https://api.openai.com https://api.anthropic.com",
+      "connect-src 'self' https://*.supabase.co wss://*.supabase.co https://api.openai.com https://api.anthropic.com https://vitals.vercel-insights.com https://*.ingest.sentry.io",
       "upgrade-insecure-requests",
     ].join("; ");
 
@@ -41,4 +43,13 @@ const nextConfig = {
   eslint: { ignoreDuringBuilds: true },
 }
 
-module.exports = nextConfig
+const sentryWebpackPluginOptions = {
+  org: process.env.SENTRY_ORG,
+  project: process.env.SENTRY_PROJECT,
+  silent: true,
+}
+const withSentry = process.env.NEXT_PUBLIC_SENTRY_DSN
+  ? (config) => withSentryConfig(config, { sentry: sentryWebpackPluginOptions })
+  : (x) => x
+
+module.exports = withSentry(nextConfig)

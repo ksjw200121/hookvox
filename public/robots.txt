@@ -1,0 +1,5 @@
+# Hookvox
+User-agent: *
+Allow: /
+
+Sitemap: https://hookvox-1yib.vercel.app/sitemap.xml
