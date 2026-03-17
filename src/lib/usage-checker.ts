@@ -257,6 +257,20 @@ async function ensureSubscriptionByInternalUserId(
   return insertedSubscription as SubscriptionRow;
 }
 
+/** 僅讀取訂閱不 INSERT，與 billing 一致，避免 usage 與帳單方案不同步 */
+async function getSubscriptionReadOnly(
+  internalUserId: string
+): Promise<SubscriptionRow | null> {
+  const supabaseAdmin = getSupabaseAdmin();
+  const { data, error } = await supabaseAdmin
+    .from("subscriptions")
+    .select("id, userId, plan, status, startDate, endDate")
+    .eq("userId", internalUserId)
+    .maybeSingle();
+  if (error || !data) return null;
+  return data as SubscriptionRow;
+}
+
 async function normalizeSubscriptionState(
   subscription: SubscriptionRow
 ): Promise<SubscriptionRow> {
@@ -316,7 +330,17 @@ async function getUserContext(supabaseId: string): Promise<{
     };
   }
 
-  const rawSubscription = await ensureSubscriptionByInternalUserId(publicUser.id);
+  // 只讀訂閱、不自動建立 FREE 列，與 billing API 同源，避免帳單顯示 Creator 但 usage 顯示 FREE
+  const rawSubscription = await getSubscriptionReadOnly(publicUser.id);
+  if (!rawSubscription) {
+    return {
+      supabaseId,
+      internalUserId: publicUser.id,
+      plan: "FREE",
+      subscription: null,
+    };
+  }
+
   const subscription = await normalizeSubscriptionState(rawSubscription);
 
   const plan: PlanName =
