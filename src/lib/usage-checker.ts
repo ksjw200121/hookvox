@@ -9,6 +9,13 @@ export type UsageAction =
   | "GENERATE_TITLES"
   | "GENERATE_IDEAS";
 
+const PLAN_LEVEL: Record<PlanName, number> = {
+  FREE: 0,
+  CREATOR: 1,
+  PRO: 2,
+  FLAGSHIP: 3,
+};
+
 const LIMITS: Record<PlanName, Record<UsageFeature, number>> = {
   FREE: {
     ANALYZE: 3,
@@ -352,8 +359,26 @@ async function getUserContext(supabaseId: string): Promise<{
     planNormalized === "CREATOR" || planNormalized === "PRO" || planNormalized === "FLAGSHIP";
   const isExplicitlyInactive = statusNormalized === "EXPIRED" || statusNormalized === "CANCELLED";
   const hasPaymentEvidence = Boolean((subscription as any)?.ecpayTradeNo);
-  const plan: PlanName =
+  let plan: PlanName =
     isPaidPlan && !isExplicitlyInactive && hasPaymentEvidence ? planNormalized : "FREE";
+
+  // 升級情境：若最新 PAID 訂單方案更高，就以訂單為準
+  const supabaseAdmin = getSupabaseAdmin();
+  const { data: paidOrder } = await supabaseAdmin
+    .from("orders")
+    .select("plan, status, paidAt, createdAt")
+    .eq("userId", publicUser.id)
+    .in("status", ["PAID", "SUCCESS"])
+    .order("paidAt", { ascending: false, nullsFirst: false })
+    .order("createdAt", { ascending: false })
+    .limit(1)
+    .maybeSingle();
+  const paidPlan = String((paidOrder as any)?.plan || "").trim().toUpperCase() as PlanName;
+  const isPaidOrderPlan =
+    paidPlan === "CREATOR" || paidPlan === "PRO" || paidPlan === "FLAGSHIP";
+  if (isPaidOrderPlan && PLAN_LEVEL[paidPlan] > PLAN_LEVEL[plan]) {
+    plan = paidPlan;
+  }
 
   return {
     supabaseId,
@@ -474,10 +499,12 @@ export async function getUsageSnapshotForSupabaseId(
   // 最後保險：若訂閱仍查不到或欄位異常，改用已付款訂單推導方案（避免帳單 Creator 但 usage 變回 0/3）
   let paidPlanFromOrders: PlanName | null = null;
   let paidAtAnchor: string | null = null;
+  let paidTradeNo: string | null = null;
+  let paidMerchantTradeNo: string | null = null;
   if (internalUserId) {
     const { data: paidOrder } = await supabaseAdmin
       .from("orders")
-      .select("plan, status, paidAt, createdAt")
+      .select("plan, status, paidAt, createdAt, tradeNo, merchantTradeNo")
       .eq("userId", internalUserId)
       .in("status", ["PAID", "SUCCESS"])
       .order("paidAt", { ascending: false, nullsFirst: false })
@@ -494,6 +521,10 @@ export async function getUsageSnapshotForSupabaseId(
         (paidOrder as any)?.paidAt ||
         (paidOrder as any)?.createdAt ||
         null;
+      paidTradeNo = (paidOrder as any)?.tradeNo ? String((paidOrder as any).tradeNo) : null;
+      paidMerchantTradeNo = (paidOrder as any)?.merchantTradeNo
+        ? String((paidOrder as any).merchantTradeNo)
+        : null;
     }
   }
 
@@ -508,12 +539,32 @@ export async function getUsageSnapshotForSupabaseId(
     planRaw === "CREATOR" || planRaw === "PRO" || planRaw === "FLAGSHIP";
   const hasPaymentEvidence =
     Boolean((subscription as any)?.ecpayTradeNo) || Boolean(paidPlanFromOrders);
+  const planFromSubscription: PlanName =
+    !isExpired && isPaidPlan && hasPaymentEvidence ? (planRaw as PlanName) : "FREE";
+
+  // 升級情境：若最新 PAID 訂單方案更高，就以訂單為準（避免付款成功但方案卡在舊的）
   const plan: PlanName =
-    !isExpired && isPaidPlan && hasPaymentEvidence
-      ? (planRaw as PlanName)
-      : paidPlanFromOrders
-        ? paidPlanFromOrders
-        : "FREE";
+    paidPlanFromOrders && PLAN_LEVEL[paidPlanFromOrders] > PLAN_LEVEL[planFromSubscription]
+      ? paidPlanFromOrders
+      : planFromSubscription;
+
+  // best-effort: 自動把 subscriptions.plan 升到已付款訂單的方案（避免下一次又打架）
+  if (
+    subscription?.id &&
+    paidPlanFromOrders &&
+    PLAN_LEVEL[paidPlanFromOrders] >
+      PLAN_LEVEL[String(subscription.plan || "FREE").trim().toUpperCase() as PlanName]
+  ) {
+    const nowIso = new Date().toISOString();
+    const updatePayload: Record<string, unknown> = {
+      plan: paidPlanFromOrders,
+      status: "ACTIVE",
+      updatedAt: nowIso,
+    };
+    if (paidTradeNo) updatePayload.ecpayTradeNo = paidTradeNo;
+    if (paidMerchantTradeNo) updatePayload.ecpayMerchantTradeNo = paidMerchantTradeNo;
+    await supabaseAdmin.from("subscriptions").update(updatePayload).eq("id", subscription.id);
+  }
 
   const { cycleStart, cycleEnd } = getCurrentCycleWindow(
     subscription?.startDate ?? paidAtAnchor ?? null

@@ -27,6 +27,13 @@ const CYCLE_LABELS: Record<string, string> = {
   annual: "年繳",
 };
 
+const PLAN_LEVEL: Record<string, number> = {
+  FREE: 0,
+  CREATOR: 1,
+  PRO: 2,
+  FLAGSHIP: 3,
+};
+
 function getCycleMonths(cycle: string) {
   const c = String(cycle || "").trim();
   if (c === "monthly") return 1;
@@ -108,53 +115,58 @@ export async function GET(req: Request) {
       plan === "CREATOR" || plan === "PRO" || plan === "FLAGSHIP";
     const isExplicitlyInactive = status === "EXPIRED" || status === "CANCELLED";
 
-    // 2) Fallback to latest PAID/SUCCESS order (some legacy cases had order PAID but subscription not updated)
-    if (!isPaidPlan || isExplicitlyInactive) {
-      const latestPaid = (orders || []).find((o) =>
-        ["PAID", "SUCCESS"].includes(String((o as any)?.status || "").toUpperCase())
-      );
-      if (latestPaid) {
-        const paidPlan = String((latestPaid as any)?.plan || "FREE").trim().toUpperCase();
-        if (paidPlan === "CREATOR" || paidPlan === "PRO" || paidPlan === "FLAGSHIP") {
-          plan = paidPlan;
-          status = "ACTIVE";
-          const anchorIso = (latestPaid as any)?.paidAt || (latestPaid as any)?.createdAt || null;
-          const cycle = String((latestPaid as any)?.billingCycle || "monthly");
-          const months = getCycleMonths(cycle);
-          if (anchorIso) {
-            const anchor = new Date(anchorIso);
-            if (!Number.isNaN(anchor.getTime())) {
-              startDate = anchor.toISOString();
-              endDate = addMonths(anchor, months).toISOString();
-            }
-          }
+    // 2) Prefer latest PAID/SUCCESS order when it is higher than subscription (upgrade case),
+    // or when subscription is missing/invalid.
+    const latestPaid = (orders || []).find((o) =>
+      ["PAID", "SUCCESS"].includes(String((o as any)?.status || "").toUpperCase())
+    );
+    const latestPaidPlan = String((latestPaid as any)?.plan || "FREE").trim().toUpperCase();
+    const isLatestPaidPlan =
+      latestPaidPlan === "CREATOR" || latestPaidPlan === "PRO" || latestPaidPlan === "FLAGSHIP";
 
-          // best-effort: self-heal subscription row to avoid future mismatches
-          const nowIso = new Date().toISOString();
-          if (subscription?.id) {
-            await supabaseAdmin
-              .from("subscriptions")
-              .update({
-                plan,
-                status: "ACTIVE",
-                startDate: startDate || nowIso,
-                endDate,
-                updatedAt: nowIso,
-              })
-              .eq("id", subscription.id);
-          } else {
-            await supabaseAdmin.from("subscriptions").insert({
-              id: crypto.randomUUID(),
-              userId: publicUser.id,
-              plan,
-              status: "ACTIVE",
-              startDate: startDate || nowIso,
-              endDate,
-              createdAt: nowIso,
-              updatedAt: nowIso,
-            });
-          }
+    const shouldUsePaidOrder =
+      Boolean(latestPaid && isLatestPaidPlan) &&
+      ((!isPaidPlan || isExplicitlyInactive) ||
+        PLAN_LEVEL[latestPaidPlan] > (PLAN_LEVEL[plan] ?? 0));
+
+    if (shouldUsePaidOrder) {
+      plan = latestPaidPlan;
+      status = "ACTIVE";
+      const anchorIso = (latestPaid as any)?.paidAt || (latestPaid as any)?.createdAt || null;
+      const cycle = String((latestPaid as any)?.billingCycle || "monthly");
+      const months = getCycleMonths(cycle);
+      if (anchorIso) {
+        const anchor = new Date(anchorIso);
+        if (!Number.isNaN(anchor.getTime())) {
+          startDate = anchor.toISOString();
+          endDate = addMonths(anchor, months).toISOString();
         }
+      }
+
+      // best-effort: self-heal subscription row to avoid future mismatches
+      const nowIso = new Date().toISOString();
+      if (subscription?.id) {
+        await supabaseAdmin
+          .from("subscriptions")
+          .update({
+            plan,
+            status: "ACTIVE",
+            startDate: startDate || nowIso,
+            endDate,
+            updatedAt: nowIso,
+          })
+          .eq("id", subscription.id);
+      } else {
+        await supabaseAdmin.from("subscriptions").insert({
+          id: crypto.randomUUID(),
+          userId: publicUser.id,
+          plan,
+          status: "ACTIVE",
+          startDate: startDate || nowIso,
+          endDate,
+          createdAt: nowIso,
+          updatedAt: nowIso,
+        });
       }
     }
 
