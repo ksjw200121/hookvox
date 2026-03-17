@@ -3,6 +3,7 @@
 import { useEffect, useState } from 'react'
 import Link from 'next/link'
 import { createClient } from '@/lib/supabase/client'
+import { USAGE_UPDATED_EVENT, type UsageUpdatedDetail } from '@/lib/usage-events'
 
 interface UsageItem {
   used: number
@@ -110,11 +111,41 @@ export default function DashboardPage() {
 
     window.addEventListener('focus', onFocus)
     document.addEventListener('visibilitychange', onVisible)
+    const onUsageUpdated = (e: Event) => {
+      if (!mounted) return
+      const detail = (e as CustomEvent<UsageUpdatedDetail>).detail
+      if (!detail) return
+
+      setData((prev) => ({
+        plan: detail.plan || prev.plan || 'FREE',
+        usage: {
+          analyze: {
+            used: detail.usage?.analyze?.used ?? prev.usage.analyze.used ?? 0,
+            limit: detail.usage?.analyze?.limit ?? prev.usage.analyze.limit ?? 3,
+            remaining: detail.usage?.analyze?.remaining ?? prev.usage.analyze.remaining ?? 3,
+          },
+          generate: {
+            used: detail.usage?.generate?.used ?? prev.usage.generate.used ?? 0,
+            limit: detail.usage?.generate?.limit ?? prev.usage.generate.limit ?? 3,
+            remaining: detail.usage?.generate?.remaining ?? prev.usage.generate.remaining ?? 3,
+          },
+          week: detail.usage?.week
+            ? {
+                analyze: detail.usage.week.analyze ?? prev.usage.week?.analyze ?? 0,
+                generate: detail.usage.week.generate ?? prev.usage.week?.generate ?? 0,
+              }
+            : prev.usage.week,
+        },
+      }))
+    }
+
+    window.addEventListener(USAGE_UPDATED_EVENT, onUsageUpdated)
 
     return () => {
       mounted = false
       window.removeEventListener('focus', onFocus)
       document.removeEventListener('visibilitychange', onVisible)
+      window.removeEventListener(USAGE_UPDATED_EVENT, onUsageUpdated)
     }
   }, [])
 

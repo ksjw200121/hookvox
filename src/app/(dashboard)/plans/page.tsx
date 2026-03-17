@@ -3,6 +3,7 @@
 import { useState, useEffect } from 'react'
 import Link from 'next/link'
 import { supabase } from '@/lib/supabase'
+import { USAGE_UPDATED_EVENT, type UsageUpdatedDetail } from '@/lib/usage-events'
 
 type BillingCycle = 'monthly' | 'quarterly' | 'biannual' | 'annual'
 
@@ -120,6 +121,16 @@ export default function PlansPage() {
     }
 
     loadUsage()
+
+    const onUsageUpdated = (e: Event) => {
+      const detail = (e as CustomEvent<UsageUpdatedDetail>).detail
+      if (detail?.plan) setCurrentPlan(detail.plan)
+    }
+    window.addEventListener(USAGE_UPDATED_EVENT, onUsageUpdated)
+
+    return () => {
+      window.removeEventListener(USAGE_UPDATED_EVENT, onUsageUpdated)
+    }
   }, [])
 
   const handleApplyCoupon = () => {

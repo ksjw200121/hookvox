@@ -5,6 +5,7 @@ import Link from "next/link";
 import { supabase } from "@/lib/supabase";
 import { FIELD_GUIDE, INDUSTRIES_WITH_STORYBOARD, Industry } from "@/prompts";
 import GuestAccessModal from "@/components/auth/GuestAccessModal";
+import { emitUsageUpdated } from "@/lib/usage-events";
 
 type ScriptScene = {
   id?: number;
@@ -144,6 +145,17 @@ async function getAuthHeader(): Promise<Record<string, string>> {
   } = await supabase.auth.getSession();
   if (!session?.access_token) return {};
   return { Authorization: `Bearer ${session.access_token}` };
+}
+
+async function refreshUsageAndBroadcast() {
+  const authHeader = await getAuthHeader();
+  if (!authHeader?.Authorization) return;
+
+  const res = await fetch("/api/usage", { method: "GET", headers: { ...authHeader } });
+  if (!res.ok) return;
+
+  const data = await readJsonSafe(res);
+  emitUsageUpdated(data || {});
 }
 
 function normalizeScripts(rawScripts: any[]): ScriptItem[] {
@@ -393,6 +405,7 @@ export default function AnalyzePage() {
       const a: AnalysisData = data?.analysis || null;
       setTranscript(data?.transcript || pasteTranscript || "");
       setAnalysis(a);
+      refreshUsageAndBroadcast();
 
       if (a?.contentCategory && BLOCKED_CATEGORIES.includes(a.contentCategory)) {
         setBlocked(true);
@@ -508,6 +521,7 @@ export default function AnalyzePage() {
       setStoryboard(nextStoryboard);
       setUsedCache(Boolean(data?.cached));
       setSavedNotice("內容已保存，可到爆款資料庫查看。");
+      refreshUsageAndBroadcast();
 
       setAnalysis((prev) => {
         if (!prev) return prev;

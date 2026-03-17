@@ -3,6 +3,7 @@
 import { useEffect, useState } from "react";
 import Link from "next/link";
 import { createClient } from "@/lib/supabase/client";
+import { USAGE_UPDATED_EVENT, type UsageUpdatedDetail } from "@/lib/usage-events";
 
 const PLAN_LABELS: Record<string, string> = {
   FREE: "免費方案",
@@ -122,7 +123,34 @@ export default function BillingPage() {
     loadData();
     const onVisible = () => loadData();
     document.addEventListener("visibilitychange", onVisible);
-    return () => document.removeEventListener("visibilitychange", onVisible);
+    const onUsageUpdated = (e: Event) => {
+      const detail = (e as CustomEvent<UsageUpdatedDetail>).detail;
+      if (!detail?.usage) return;
+
+      setUsage((prev) => ({
+        analyze: {
+          used: detail.usage?.analyze?.used ?? prev?.analyze?.used ?? 0,
+          limit: detail.usage?.analyze?.limit ?? prev?.analyze?.limit ?? 3,
+          remaining: detail.usage?.analyze?.remaining ?? prev?.analyze?.remaining ?? 3,
+        },
+        generate: {
+          used: detail.usage?.generate?.used ?? prev?.generate?.used ?? 0,
+          limit: detail.usage?.generate?.limit ?? prev?.generate?.limit ?? 3,
+          remaining: detail.usage?.generate?.remaining ?? prev?.generate?.remaining ?? 3,
+        },
+        cycleEnd:
+          detail.usage?.analyze?.cycleEnd ??
+          detail.usage?.generate?.cycleEnd ??
+          ((prev as any)?.cycleEnd ?? null),
+      }));
+    };
+
+    window.addEventListener(USAGE_UPDATED_EVENT, onUsageUpdated);
+
+    return () => {
+      document.removeEventListener("visibilitychange", onVisible);
+      window.removeEventListener(USAGE_UPDATED_EVENT, onUsageUpdated);
+    };
   }, []);
 
   function formatDate(iso: string | null) {
