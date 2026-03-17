@@ -342,6 +342,34 @@ export async function getUserPlan(supabaseId: string): Promise<PlanName> {
   return context.plan;
 }
 
+/** 僅讀取訂閱方案，不建立 subscription、不拋錯，用於 usage API 錯誤時仍回傳與帳單一致的方案 */
+export async function getPlanForSupabaseIdSafe(supabaseId: string): Promise<PlanName> {
+  try {
+    const publicUser = await ensurePublicUserBySupabaseId(supabaseId);
+    if (!publicUser?.id) return "FREE";
+    const supabaseAdmin = getSupabaseAdmin();
+    const { data: sub, error } = await supabaseAdmin
+      .from("subscriptions")
+      .select("plan, status, endDate")
+      .eq("userId", publicUser.id)
+      .maybeSingle();
+    if (error || !sub) return "FREE";
+    const plan = String(sub.plan || "FREE").toUpperCase() as PlanName;
+    const status = String(sub.status || "");
+    const endDate = sub.endDate ? new Date(sub.endDate) : null;
+    if (endDate && !Number.isNaN(endDate.getTime()) && endDate <= new Date())
+      return "FREE";
+    if (
+      status === "ACTIVE" &&
+      (plan === "CREATOR" || plan === "PRO" || plan === "FLAGSHIP")
+    )
+      return plan;
+    return "FREE";
+  } catch {
+    return "FREE";
+  }
+}
+
 export function getActionGroup(action: string): UsageFeature | null {
   if (action === "ANALYZE") return "ANALYZE";
 

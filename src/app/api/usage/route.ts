@@ -3,6 +3,7 @@ import {
   getUserIdFromRequest,
   checkUsageLimit,
   getWeekUsage,
+  getPlanForSupabaseIdSafe,
 } from "@/lib/usage-checker";
 
 export const runtime = "nodejs";
@@ -66,13 +67,27 @@ export async function GET(req: Request) {
   } catch (error: unknown) {
     const err = error as Error;
     console.error("usage api error:", err);
-    // 仍回傳 200 + 預設額度，避免帳單頁「無法載入額度」
+    // 仍回傳 200，且盡量帶入與帳單一致的方案，避免控制台/方案頁顯示免費、帳單卻顯示訂閱中
+    let fallbackPlan = "FREE";
+    try {
+      const userId = await getUserIdFromRequest(req);
+      if (userId) fallbackPlan = await getPlanForSupabaseIdSafe(userId);
+    } catch {
+      // 忽略
+    }
+    const limits = {
+      FREE: { analyze: 3, generate: 3 },
+      CREATOR: { analyze: 50, generate: 50 },
+      PRO: { analyze: 200, generate: 200 },
+      FLAGSHIP: { analyze: 500, generate: 500 },
+    } as const;
+    const limit = limits[fallbackPlan as keyof typeof limits] || limits.FREE;
     return NextResponse.json({
-      plan: "FREE",
+      plan: fallbackPlan,
       usage: {
-        ...emptyUsage,
-        analyze: { ...emptyUsage.analyze },
-        generate: { ...emptyUsage.generate },
+        analyze: { used: 0, limit: limit.analyze, remaining: limit.analyze, cycleStart: null, cycleEnd: null },
+        generate: { used: 0, limit: limit.generate, remaining: limit.generate, cycleStart: null, cycleEnd: null },
+        week: { analyze: 0, generate: 0 },
       },
       _error: err?.message || "伺服器錯誤",
     });
