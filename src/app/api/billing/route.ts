@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { createClient } from "@supabase/supabase-js";
 import { getUserIdFromRequest, ensurePublicUserBySupabaseId } from "@/lib/usage-checker";
+import crypto from "crypto";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -25,6 +26,21 @@ const CYCLE_LABELS: Record<string, string> = {
   biannual: "半年繳",
   annual: "年繳",
 };
+
+function getCycleMonths(cycle: string) {
+  const c = String(cycle || "").trim();
+  if (c === "monthly") return 1;
+  if (c === "quarterly") return 3;
+  if (c === "biannual") return 6;
+  if (c === "annual") return 12;
+  return 1;
+}
+
+function addMonths(base: Date, months: number) {
+  const d = new Date(base);
+  d.setMonth(d.getMonth() + months);
+  return d;
+}
 
 export async function GET(req: Request) {
   try {
@@ -77,13 +93,68 @@ export async function GET(req: Request) {
     let startDate: string | null = null;
     let endDate: string | null = null;
 
+    // 1) Prefer subscriptions table if it indicates a paid plan and is not expired
     if (subscription) {
-      plan = String(subscription.plan || "FREE").toUpperCase();
-      status = String(subscription.status || "");
+      plan = String(subscription.plan || "FREE").trim().toUpperCase();
+      status = String(subscription.status || "").trim().toUpperCase();
       startDate = subscription.startDate ?? null;
       endDate = subscription.endDate ?? null;
       if (endDate && new Date(endDate) <= new Date()) {
         status = "EXPIRED";
+      }
+    }
+
+    const isPaidPlan =
+      plan === "CREATOR" || plan === "PRO" || plan === "FLAGSHIP";
+    const isExplicitlyInactive = status === "EXPIRED" || status === "CANCELLED";
+
+    // 2) Fallback to latest PAID/SUCCESS order (some legacy cases had order PAID but subscription not updated)
+    if (!isPaidPlan || isExplicitlyInactive) {
+      const latestPaid = (orders || []).find((o) =>
+        ["PAID", "SUCCESS"].includes(String((o as any)?.status || "").toUpperCase())
+      );
+      if (latestPaid) {
+        const paidPlan = String((latestPaid as any)?.plan || "FREE").trim().toUpperCase();
+        if (paidPlan === "CREATOR" || paidPlan === "PRO" || paidPlan === "FLAGSHIP") {
+          plan = paidPlan;
+          status = "ACTIVE";
+          const anchorIso = (latestPaid as any)?.paidAt || (latestPaid as any)?.createdAt || null;
+          const cycle = String((latestPaid as any)?.billingCycle || "monthly");
+          const months = getCycleMonths(cycle);
+          if (anchorIso) {
+            const anchor = new Date(anchorIso);
+            if (!Number.isNaN(anchor.getTime())) {
+              startDate = anchor.toISOString();
+              endDate = addMonths(anchor, months).toISOString();
+            }
+          }
+
+          // best-effort: self-heal subscription row to avoid future mismatches
+          const nowIso = new Date().toISOString();
+          if (subscription?.id) {
+            await supabaseAdmin
+              .from("subscriptions")
+              .update({
+                plan,
+                status: "ACTIVE",
+                startDate: startDate || nowIso,
+                endDate,
+                updatedAt: nowIso,
+              })
+              .eq("id", subscription.id);
+          } else {
+            await supabaseAdmin.from("subscriptions").insert({
+              id: crypto.randomUUID(),
+              userId: publicUser.id,
+              plan,
+              status: "ACTIVE",
+              startDate: startDate || nowIso,
+              endDate,
+              createdAt: nowIso,
+              updatedAt: nowIso,
+            });
+          }
+        }
       }
     }
 
