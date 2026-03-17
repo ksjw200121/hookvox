@@ -32,7 +32,7 @@ export async function GET(req: Request) {
     if (!debug) {
       return NextResponse.json({
         ...snapshot,
-        version: "usage-snapshot-v3",
+        version: "usage-snapshot-v4",
         commit: process.env.VERCEL_GIT_COMMIT_SHA || null,
       });
     }
@@ -51,7 +51,7 @@ export async function GET(req: Request) {
 
     return NextResponse.json({
       ...snapshot,
-      version: "usage-snapshot-v3",
+      version: "usage-snapshot-v4",
       commit: process.env.VERCEL_GIT_COMMIT_SHA || null,
       _debug: {
         supabaseId: userId,
@@ -71,7 +71,7 @@ export async function GET(req: Request) {
         week: { analyze: 0, generate: 0 },
       },
       _error: err?.message || "伺服器錯誤",
-      version: "usage-snapshot-v3",
+      version: "usage-snapshot-v4",
       commit: process.env.VERCEL_GIT_COMMIT_SHA || null,
     });
   }

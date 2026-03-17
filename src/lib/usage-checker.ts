@@ -381,9 +381,9 @@ export async function getPlanForSupabaseIdSafe(supabaseId: string): Promise<Plan
     const endDate = sub.endDate ? new Date(sub.endDate) : null;
     if (endDate && !Number.isNaN(endDate.getTime()) && endDate <= new Date())
       return "FREE";
+    // 與帳單顯示對齊：只要是付費方案且未過期，就視為有效
     const isPaidPlan = plan === "CREATOR" || plan === "PRO" || plan === "FLAGSHIP";
-    const isExplicitlyInactive = status === "EXPIRED" || status === "CANCELLED";
-    if (isPaidPlan && !isExplicitlyInactive) return plan;
+    if (isPaidPlan) return plan;
     return "FREE";
   } catch {
     return "FREE";
@@ -473,14 +473,11 @@ export async function getUsageSnapshotForSupabaseId(
   const isExpired =
     endDate && !Number.isNaN(endDate.getTime()) && endDate <= new Date();
 
-  // 對齊帳單顯示邏輯：只要是付費方案且未過期，就視為有效（避免 status 因歷史資料格式造成誤判）
+  // 與帳單顯示對齊：只要是付費方案且未過期，就視為有效（不再讓 status 造成誤判）
   const isPaidPlan =
     planRaw === "CREATOR" || planRaw === "PRO" || planRaw === "FLAGSHIP";
-  const isExplicitlyInactive = status === "EXPIRED" || status === "CANCELLED";
   const plan: PlanName =
-    !isExpired && isPaidPlan && !isExplicitlyInactive
-      ? (planRaw as PlanName)
-      : "FREE";
+    !isExpired && isPaidPlan ? (planRaw as PlanName) : "FREE";
 
   const { cycleStart, cycleEnd } = getCurrentCycleWindow(
     subscription?.startDate ?? null
