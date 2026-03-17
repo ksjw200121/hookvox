@@ -92,7 +92,26 @@ export default function BillingPage() {
         return;
       }
 
-      setSubscription(billingData.subscription || null);
+      const usagePlan = String(usageData?.plan || "").trim().toUpperCase();
+      const normalizedUsagePlan =
+        usagePlan && PLAN_LABELS[usagePlan] ? usagePlan : "";
+
+      // 帳單頁的「目前方案」以 usage 的 plan 為準（與控制台/方案頁一致）。
+      // billing API 的 subscription 仍保留用於顯示週期/到期日等資訊。
+      const sub = billingData.subscription || null;
+      setSubscription(
+        sub
+          ? {
+              ...sub,
+              plan: normalizedUsagePlan || sub.plan,
+              planLabel: PLAN_LABELS[normalizedUsagePlan] || sub.planLabel,
+              status:
+                normalizedUsagePlan && normalizedUsagePlan !== "FREE"
+                  ? "ACTIVE"
+                  : sub.status,
+            }
+          : null
+      );
       setOrders(billingData.orders || []);
 
       if (usageRes.ok && usageData?.usage) {
