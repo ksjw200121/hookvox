@@ -346,11 +346,10 @@ async function getUserContext(supabaseId: string): Promise<{
   const statusNormalized = String(subscription.status || "").trim().toUpperCase();
   const planNormalized = String(subscription.plan || "FREE").trim().toUpperCase() as PlanName;
 
-  const plan: PlanName =
-    statusNormalized === "ACTIVE" &&
-    (planNormalized === "CREATOR" || planNormalized === "PRO" || planNormalized === "FLAGSHIP")
-      ? planNormalized
-      : "FREE";
+  const isPaidPlan =
+    planNormalized === "CREATOR" || planNormalized === "PRO" || planNormalized === "FLAGSHIP";
+  const isExplicitlyInactive = statusNormalized === "EXPIRED" || statusNormalized === "CANCELLED";
+  const plan: PlanName = isPaidPlan && !isExplicitlyInactive ? planNormalized : "FREE";
 
   return {
     supabaseId,
@@ -382,11 +381,9 @@ export async function getPlanForSupabaseIdSafe(supabaseId: string): Promise<Plan
     const endDate = sub.endDate ? new Date(sub.endDate) : null;
     if (endDate && !Number.isNaN(endDate.getTime()) && endDate <= new Date())
       return "FREE";
-    if (
-      status === "ACTIVE" &&
-      (plan === "CREATOR" || plan === "PRO" || plan === "FLAGSHIP")
-    )
-      return plan;
+    const isPaidPlan = plan === "CREATOR" || plan === "PRO" || plan === "FLAGSHIP";
+    const isExplicitlyInactive = status === "EXPIRED" || status === "CANCELLED";
+    if (isPaidPlan && !isExplicitlyInactive) return plan;
     return "FREE";
   } catch {
     return "FREE";
@@ -456,10 +453,12 @@ export async function getUsageSnapshotForSupabaseId(
   const isExpired =
     endDate && !Number.isNaN(endDate.getTime()) && endDate <= new Date();
 
+  // 對齊帳單顯示邏輯：只要是付費方案且未過期，就視為有效（避免 status 因歷史資料格式造成誤判）
+  const isPaidPlan =
+    planRaw === "CREATOR" || planRaw === "PRO" || planRaw === "FLAGSHIP";
+  const isExplicitlyInactive = status === "EXPIRED" || status === "CANCELLED";
   const plan: PlanName =
-    !isExpired &&
-    status === "ACTIVE" &&
-    (planRaw === "CREATOR" || planRaw === "PRO" || planRaw === "FLAGSHIP")
+    !isExpired && isPaidPlan && !isExplicitlyInactive
       ? (planRaw as PlanName)
       : "FREE";
 
