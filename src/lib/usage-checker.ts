@@ -343,14 +343,13 @@ async function getUserContext(supabaseId: string): Promise<{
 
   const subscription = await normalizeSubscriptionState(rawSubscription);
 
+  const statusNormalized = String(subscription.status || "").toUpperCase();
+  const planNormalized = String(subscription.plan || "FREE").toUpperCase() as PlanName;
+
   const plan: PlanName =
-    subscription.status === "ACTIVE" &&
-    (
-      subscription.plan === "CREATOR" ||
-      subscription.plan === "PRO" ||
-      subscription.plan === "FLAGSHIP"
-    )
-      ? subscription.plan
+    statusNormalized === "ACTIVE" &&
+    (planNormalized === "CREATOR" || planNormalized === "PRO" || planNormalized === "FLAGSHIP")
+      ? planNormalized
       : "FREE";
 
   return {
