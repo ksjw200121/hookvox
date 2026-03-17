@@ -475,26 +475,7 @@ export async function getUsageSnapshotForSupabaseId(
       subscription = await normalizeSubscriptionState(subscription);
     }
   }
-  // 若仍找不到訂閱：再用 auth email 對齊一次（避免 users.supabaseId 映射在特殊情況下不同步）
-  if (!subscription) {
-    const authUser = await getAuthUserFromSupabaseId(supabaseId);
-    const email = (authUser?.email || "").trim().toLowerCase();
-    if (email) {
-      const { data: byEmail } = await supabaseAdmin
-        .from("users")
-        .select("id")
-        .eq("email", email)
-        .maybeSingle();
-      const emailUserId = (byEmail as any)?.id ? String((byEmail as any).id) : null;
-      if (emailUserId && emailUserId !== internalUserId) {
-        internalUserId = emailUserId;
-        subscription = await getSubscriptionReadOnly(internalUserId);
-        if (subscription) {
-          subscription = await normalizeSubscriptionState(subscription);
-        }
-      }
-    }
-  }
+  // Email fallback 已移除：會撿到其他帳號的舊 orders，導致誤回付費方案
 
   // 最後保險：若訂閱仍查不到或欄位異常，改用已付款訂單推導方案（避免帳單 Creator 但 usage 變回 0/3）
   let paidPlanFromOrders: PlanName | null = null;
