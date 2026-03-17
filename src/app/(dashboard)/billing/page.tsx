@@ -79,52 +79,65 @@ export default function BillingPage() {
         return;
       }
 
-      const [billingRes, usageRes] = await Promise.all([
-        fetch("/api/billing", { headers: { Authorization: `Bearer ${token}` } }),
-        fetch("/api/usage", { headers: { Authorization: `Bearer ${token}` } }),
-      ]);
-
+      // 先跑 billing（讓它 self-heal 訂閱），再跑 usage（這時訂閱已更新）
+      // 避免 parallel 時 usage 看不到 billing 剛建立的 Creator 訂閱
+      const billingRes = await fetch("/api/billing", {
+        headers: { Authorization: `Bearer ${token}` },
+      });
       const billingData = await billingRes.json();
-      const usageData = await usageRes.json();
 
       if (!billingRes.ok) {
         setError(billingData?.error || "無法載入帳單");
         return;
       }
 
-      const usagePlan = String(usageData?.plan || "").trim().toUpperCase();
-      const normalizedUsagePlan =
-        usagePlan && PLAN_LABELS[usagePlan] ? usagePlan : "";
+      const usageRes = await fetch("/api/usage", {
+        headers: { Authorization: `Bearer ${token}` },
+      });
+      const usageData = await usageRes.json();
 
-      // 帳單頁的「目前方案」以 usage 的 plan 為準（與控制台/方案頁一致）。
-      // billing API 的 subscription 仍保留用於顯示週期/到期日等資訊。
+      const PLAN_LEVEL_MAP: Record<string, number> = {
+        FREE: 0, CREATOR: 1, PRO: 2, FLAGSHIP: 3,
+      };
+      const billingSubPlan = String(billingData.subscription?.plan || "FREE").trim().toUpperCase();
+      const usagePlan = String(usageData?.plan || "FREE").trim().toUpperCase();
+      // 取較高方案顯示，避免 usage 因 race condition 回 FREE 而蓋掉 billing 的付費方案
+      const effectivePlan =
+        (PLAN_LEVEL_MAP[usagePlan] ?? 0) >= (PLAN_LEVEL_MAP[billingSubPlan] ?? 0)
+          ? usagePlan
+          : billingSubPlan;
+
       const sub = billingData.subscription || null;
       setSubscription(
         sub
           ? {
               ...sub,
-              plan: normalizedUsagePlan || sub.plan,
-              planLabel: PLAN_LABELS[normalizedUsagePlan] || sub.planLabel,
-              status:
-                normalizedUsagePlan && normalizedUsagePlan !== "FREE"
-                  ? "ACTIVE"
-                  : sub.status,
+              plan: effectivePlan,
+              planLabel: PLAN_LABELS[effectivePlan] || sub.planLabel,
+              status: effectivePlan !== "FREE" ? "ACTIVE" : sub.status,
             }
           : null
       );
       setOrders(billingData.orders || []);
 
+      // usage 的額度以 effectivePlan 對應的 limits 為基準（避免 race condition 顯示錯誤次數）
+      const PLAN_LIMITS: Record<string, number> = {
+        FREE: 3, CREATOR: 50, PRO: 200, FLAGSHIP: 500,
+      };
+      const correctLimit = PLAN_LIMITS[effectivePlan] ?? 3;
       if (usageRes.ok && usageData?.usage) {
+        const analyzeUsed = usageData.usage.analyze?.used ?? 0;
+        const generateUsed = usageData.usage.generate?.used ?? 0;
         setUsage({
           analyze: {
-            used: usageData.usage.analyze?.used ?? 0,
-            limit: usageData.usage.analyze?.limit ?? 0,
-            remaining: usageData.usage.analyze?.remaining ?? 0,
+            used: analyzeUsed,
+            limit: correctLimit,
+            remaining: Math.max(0, correctLimit - analyzeUsed),
           },
           generate: {
-            used: usageData.usage.generate?.used ?? 0,
-            limit: usageData.usage.generate?.limit ?? 0,
-            remaining: usageData.usage.generate?.remaining ?? 0,
+            used: generateUsed,
+            limit: correctLimit,
+            remaining: Math.max(0, correctLimit - generateUsed),
           },
           cycleEnd: usageData.usage.analyze?.cycleEnd ?? null,
         });
