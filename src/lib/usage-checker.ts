@@ -467,6 +467,32 @@ export async function getUsageSnapshotForSupabaseId(
     }
   }
 
+  // 最後保險：若訂閱仍查不到或欄位異常，改用已付款訂單推導方案（避免帳單 Creator 但 usage 變回 0/3）
+  let paidPlanFromOrders: PlanName | null = null;
+  let paidAtAnchor: string | null = null;
+  if (internalUserId) {
+    const { data: paidOrder } = await supabaseAdmin
+      .from("orders")
+      .select("plan, status, paidAt, createdAt")
+      .eq("userId", internalUserId)
+      .in("status", ["PAID", "SUCCESS"])
+      .order("paidAt", { ascending: false, nullsFirst: false })
+      .order("createdAt", { ascending: false })
+      .limit(1)
+      .maybeSingle();
+
+    const p = String((paidOrder as any)?.plan || "").trim().toUpperCase();
+    const isPaidPlan =
+      p === "CREATOR" || p === "PRO" || p === "FLAGSHIP";
+    if (isPaidPlan) {
+      paidPlanFromOrders = p as PlanName;
+      paidAtAnchor =
+        (paidOrder as any)?.paidAt ||
+        (paidOrder as any)?.createdAt ||
+        null;
+    }
+  }
+
   const status = String(subscription?.status || "").trim().toUpperCase();
   const planRaw = String(subscription?.plan || "FREE").trim().toUpperCase();
   const endDate = subscription?.endDate ? new Date(subscription.endDate) : null;
@@ -477,10 +503,14 @@ export async function getUsageSnapshotForSupabaseId(
   const isPaidPlan =
     planRaw === "CREATOR" || planRaw === "PRO" || planRaw === "FLAGSHIP";
   const plan: PlanName =
-    !isExpired && isPaidPlan ? (planRaw as PlanName) : "FREE";
+    !isExpired && isPaidPlan
+      ? (planRaw as PlanName)
+      : paidPlanFromOrders
+        ? paidPlanFromOrders
+        : "FREE";
 
   const { cycleStart, cycleEnd } = getCurrentCycleWindow(
-    subscription?.startDate ?? null
+    subscription?.startDate ?? paidAtAnchor ?? null
   );
 
   const weekStart = new Date();
