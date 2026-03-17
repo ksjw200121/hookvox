@@ -105,6 +105,7 @@ export async function POST(req: Request) {
     if (!subRow?.id) {
       const nowIso = new Date().toISOString();
       const { error: insertSubErr } = await supabaseAdmin.from("subscriptions").insert({
+        id: crypto.randomUUID(),
         userId: publicUser.id,
         plan: "FREE",
         status: "ACTIVE",

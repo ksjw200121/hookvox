@@ -337,6 +337,7 @@ export async function POST(req: Request) {
       const { error: insertSubscriptionError } = await supabaseAdmin
         .from("subscriptions")
         .insert({
+          id: crypto.randomUUID(),
           userId: publicUser.id,
           plan,
           status: "ACTIVE",
