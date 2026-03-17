@@ -169,6 +169,7 @@ export default function BillingPage() {
   async function handleContinuePayment(order: OrderRow) {
     if (order.status !== "PENDING" || !order.merchantTradeNo) return;
     setContinuingId(order.id);
+    setError("");
     try {
       const supabase = createClient();
       const { data: { session } } = await supabase.auth.getSession();
@@ -194,6 +195,18 @@ export default function BillingPage() {
         setError("付款資料建立失敗");
         return;
       }
+
+      // 續繳會把舊訂單標記為 CANCELLED 並建立新的一筆 PENDING。
+      // 若不刷新，畫面仍會顯示舊單可「繼續付款」，再次點擊就會出現「此訂單已付款或已失效」。
+      const billingRes = await fetch("/api/billing", {
+        headers: { Authorization: `Bearer ${token}` },
+      });
+      const billingData = await billingRes.json();
+      if (billingRes.ok) {
+        setOrders(billingData?.orders || []);
+        setSubscription(billingData?.subscription || null);
+      }
+
       const wrapper = document.createElement("div");
       wrapper.innerHTML = data.paymentHtml;
       document.body.appendChild(wrapper);
