@@ -126,25 +126,40 @@ function extractTextFromClaude(
 }
 
 function safeParseJson(raw: string) {
+  const trimmed = raw.trim().replace(/^\uFEFF/, "");
+
   try {
-    return JSON.parse(raw.trim());
+    return JSON.parse(trimmed);
   } catch {}
 
-  const start = raw.indexOf("{");
-  const end = raw.lastIndexOf("}");
-  if (start !== -1 && end !== -1 && end > start) {
+  const fencedMatch = trimmed.match(/```json\s*([\s\S]*?)\s*```/i) || trimmed.match(/```\s*([\s\S]*?)\s*```/i);
+  if (fencedMatch?.[1]) {
     try {
-      return JSON.parse(raw.slice(start, end + 1));
+      return JSON.parse(fencedMatch[1].trim());
     } catch {}
   }
 
-  const cleaned = raw
+  const start = trimmed.indexOf("{");
+  const end = trimmed.lastIndexOf("}");
+  if (start !== -1 && end !== -1 && end > start) {
+    const candidate = trimmed.slice(start, end + 1);
+    try {
+      return JSON.parse(candidate);
+    } catch {
+      const noTrailingCommas = candidate.replace(/,\s*([}\]])/g, "$1");
+      try {
+        return JSON.parse(noTrailingCommas);
+      } catch {}
+    }
+  }
+
+  const cleaned = trimmed
     .replace(/^```json\s*/i, "")
     .replace(/^```\s*/i, "")
     .replace(/\s*```$/i, "")
     .trim();
 
-  return JSON.parse(cleaned);
+  return JSON.parse(cleaned.replace(/,\s*([}\]])/g, "$1"));
 }
 
 function isBlockedPlatform(url: string) {
@@ -422,6 +437,7 @@ export async function POST(req: Request) {
     const response = await anthropic.messages.create({
       model: "claude-sonnet-4-6",
       max_tokens: 2000,
+      temperature: 0,
       system: [
         {
           type: "text",
