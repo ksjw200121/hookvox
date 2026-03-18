@@ -166,9 +166,6 @@ export async function GET(req: Request) {
       });
     }
 
-    const url = new URL(req.url);
-    const debugMode = url.searchParams.get("debug") === "1";
-
     return NextResponse.json({
       subscription: {
         plan,
@@ -177,14 +174,6 @@ export async function GET(req: Request) {
         startDate,
         endDate,
       },
-      ...(debugMode && {
-        _debug: {
-          internalUserId: publicUser.id,
-          supabaseId,
-          ordersCount: (orders || []).length,
-          subscriptionRaw: subscription,
-        },
-      }),
       orders: (orders || []).map((o) => ({
         id: o.id,
         plan: o.plan,

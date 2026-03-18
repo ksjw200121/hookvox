@@ -52,53 +52,26 @@ function addMonths(base: Date, months: number) {
   return d;
 }
 
-async function tryProcessEcpayResult(body: Record<string, string>, stage: string) {
-  // Validate required fields
-  const merchantTradeNo = body.MerchantTradeNo || "";
-  const tradeNo = body.TradeNo || "";
-  const rtnCode = body.RtnCode || "";
-  const tradeAmt = Number(body.TradeAmt || 0);
-
-  if (!merchantTradeNo || !tradeNo || !rtnCode) {
-    console.error(`[${stage}] missing fields: merchantTradeNo=${merchantTradeNo} tradeNo=${tradeNo} rtnCode=${rtnCode}`);
-    return;
-  }
-
-  const received = body.CheckMacValue || "";
-  const expected = generateCheckMacValue(body);
-  if (!received || received !== expected) {
-    console.error(`[${stage}] CheckMacValue mismatch: received=${received?.slice(0,10)} expected=${expected?.slice(0,10)}`);
-    return;
-  }
-
-  if (rtnCode !== "1") {
-    console.error(`[${stage}] rtnCode not 1: ${rtnCode}`);
-    return;
-  }
-
-  const supabaseId = String(body.CustomField1 || "").trim();
-  const plan = String(body.CustomField2 || "").trim().toUpperCase() as PlanName;
-  const billingCycle = String(body.CustomField3 || "").trim() as BillingCycle;
-
-  if (!supabaseId) { console.error(`[${stage}] missing supabaseId`); return; }
-  if (!["CREATOR", "PRO", "FLAGSHIP"].includes(plan)) { console.error(`[${stage}] invalid plan: ${plan}`); return; }
-  if (!["monthly", "quarterly", "biannual", "annual"].includes(billingCycle)) { console.error(`[${stage}] invalid billingCycle: ${billingCycle}`); return; }
-
-  const supabaseAdmin = getSupabaseAdmin();
-  console.log(`[${stage}] processing: merchantTradeNo=${merchantTradeNo} supabaseId=${supabaseId} plan=${plan} cycle=${billingCycle} tradeAmt=${tradeAmt}`);
-
-  // best-effort audit log (do not block)
+async function logOrderResultEvent(
+  supabaseAdmin: ReturnType<typeof getSupabaseAdmin>,
+  body: Record<string, string>,
+  stage: string,
+  ok: boolean,
+  message: string,
+  checkMacValid?: boolean
+) {
   try {
+    const tradeAmt = Number(body.TradeAmt || 0);
     await supabaseAdmin.from("payment_webhook_events").insert({
       id: crypto.randomUUID(),
       provider: "ECPAY",
-      ok: true,
+      ok,
       stage,
-      message: "OrderResultURL received",
-      check_mac_valid: true,
-      merchant_trade_no: merchantTradeNo,
-      trade_no: tradeNo,
-      rtn_code: rtnCode,
+      message,
+      check_mac_valid: typeof checkMacValid === "boolean" ? checkMacValid : null,
+      merchant_trade_no: body.MerchantTradeNo || null,
+      trade_no: body.TradeNo || null,
+      rtn_code: body.RtnCode || null,
       trade_amt: Number.isFinite(tradeAmt) ? tradeAmt : null,
       ip: "order_result_url",
       user_agent: null,
@@ -106,7 +79,50 @@ async function tryProcessEcpayResult(body: Record<string, string>, stage: string
       created_at: new Date().toISOString(),
     });
   } catch {
-    // ignore
+    // Ignore audit failures to avoid breaking redirects
+  }
+}
+
+async function tryProcessEcpayResult(body: Record<string, string>, stage: string) {
+  // Validate required fields
+  const merchantTradeNo = body.MerchantTradeNo || "";
+  const tradeNo = body.TradeNo || "";
+  const rtnCode = body.RtnCode || "";
+  const tradeAmt = Number(body.TradeAmt || 0);
+  const supabaseAdmin = getSupabaseAdmin();
+
+  if (!merchantTradeNo || !tradeNo || !rtnCode) {
+    await logOrderResultEvent(supabaseAdmin, body, stage, false, "missing required fields");
+    return;
+  }
+
+  const received = body.CheckMacValue || "";
+  const expected = generateCheckMacValue(body);
+  if (!received || received !== expected) {
+    await logOrderResultEvent(supabaseAdmin, body, stage, false, "CheckMacValue mismatch", false);
+    return;
+  }
+
+  if (rtnCode !== "1") {
+    await logOrderResultEvent(supabaseAdmin, body, stage, true, `RtnCode=${rtnCode}`, true);
+    return;
+  }
+
+  const supabaseId = String(body.CustomField1 || "").trim();
+  const plan = String(body.CustomField2 || "").trim().toUpperCase() as PlanName;
+  const billingCycle = String(body.CustomField3 || "").trim() as BillingCycle;
+
+  if (!supabaseId) {
+    await logOrderResultEvent(supabaseAdmin, body, stage, false, "missing supabaseId", true);
+    return;
+  }
+  if (!["CREATOR", "PRO", "FLAGSHIP"].includes(plan)) {
+    await logOrderResultEvent(supabaseAdmin, body, stage, false, `invalid plan: ${plan}`, true);
+    return;
+  }
+  if (!["monthly", "quarterly", "biannual", "annual"].includes(billingCycle)) {
+    await logOrderResultEvent(supabaseAdmin, body, stage, false, `invalid billing cycle: ${billingCycle}`, true);
+    return;
   }
 
   const { data: publicUser, error: userErr } = await supabaseAdmin
@@ -115,7 +131,14 @@ async function tryProcessEcpayResult(body: Record<string, string>, stage: string
     .eq("supabaseId", supabaseId)
     .maybeSingle();
   if (!publicUser?.id) {
-    console.error(`[${stage}] user not found for supabaseId=${supabaseId} err=${userErr?.message}`);
+    await logOrderResultEvent(
+      supabaseAdmin,
+      body,
+      stage,
+      false,
+      `user not found: ${userErr?.message || "unknown"}`,
+      true
+    );
     return;
   }
 
@@ -125,32 +148,38 @@ async function tryProcessEcpayResult(body: Record<string, string>, stage: string
     .eq("merchantTradeNo", merchantTradeNo)
     .maybeSingle();
   if (!order?.id) {
-    console.error(`[${stage}] order not found for merchantTradeNo=${merchantTradeNo} err=${orderErr?.message}`);
+    await logOrderResultEvent(
+      supabaseAdmin,
+      body,
+      stage,
+      false,
+      `order not found: ${orderErr?.message || "unknown"}`,
+      true
+    );
     return;
   }
   if (order.userId !== publicUser.id) {
-    console.error(`[${stage}] userId mismatch: order.userId=${order.userId} publicUser.id=${publicUser.id}`);
+    await logOrderResultEvent(supabaseAdmin, body, stage, false, "order user mismatch", true);
     return;
   }
   if (String(order.plan).toUpperCase() !== plan) {
-    console.error(`[${stage}] plan mismatch: order.plan=${order.plan} body.plan=${plan}`);
+    await logOrderResultEvent(supabaseAdmin, body, stage, false, "order plan mismatch", true);
     return;
   }
   if (String(order.billingCycle) !== billingCycle) {
-    console.error(`[${stage}] cycle mismatch: order.billingCycle=${order.billingCycle} body.cycle=${billingCycle}`);
+    await logOrderResultEvent(supabaseAdmin, body, stage, false, "order billing cycle mismatch", true);
     return;
   }
   if (Number(order.amount) !== tradeAmt) {
-    console.error(`[${stage}] amount mismatch: order.amount=${order.amount} tradeAmt=${tradeAmt}`);
+    await logOrderResultEvent(supabaseAdmin, body, stage, false, "order amount mismatch", true);
     return;
   }
 
   // Idempotent: if already paid, nothing to do
   if (String(order.status).toUpperCase() === "PAID") {
-    console.log(`[${stage}] order already paid: ${order.id}`);
+    await logOrderResultEvent(supabaseAdmin, body, stage, true, "order already paid", true);
     return;
   }
-  console.log(`[${stage}] updating order ${order.id} to PAID for user ${publicUser.id}`);
 
   const now = new Date();
   const nowIso = now.toISOString();
@@ -198,6 +227,8 @@ async function tryProcessEcpayResult(body: Record<string, string>, stage: string
     .from("orders")
     .update({ status: "PAID", tradeNo, paidAt: nowIso, updatedAt: nowIso })
     .eq("id", order.id);
+
+  await logOrderResultEvent(supabaseAdmin, body, stage, true, "order result processed", true);
 }
 
 export async function POST(req: Request) {

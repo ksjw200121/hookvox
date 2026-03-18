@@ -295,13 +295,14 @@ export async function POST(req: Request) {
 
     const now = new Date();
     const updateTime = new Date().toISOString();
+    const currentEndDate = subscription?.endDate ? new Date(subscription.endDate) : null;
 
     // 升級（本期內加購更高方案）：不重算週期，次數延續。到期後重購 = 新週期，次數重置，收方案全額。
     const isUpgrade =
-      subscription.status === "ACTIVE" &&
-      subscription.endDate &&
-      !Number.isNaN(new Date(subscription.endDate).getTime()) &&
-      new Date(subscription.endDate) > now;
+      subscription?.status === "ACTIVE" &&
+      Boolean(currentEndDate) &&
+      !Number.isNaN(currentEndDate!.getTime()) &&
+      currentEndDate! > now;
 
     const updatePayload: Record<string, unknown> = {
       plan,
