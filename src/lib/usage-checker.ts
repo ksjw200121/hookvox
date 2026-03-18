@@ -1,5 +1,6 @@
 import crypto from "crypto";
 import { createClient } from "@supabase/supabase-js";
+import { prisma } from "@/lib/prisma";
 
 export type PlanName = "FREE" | "CREATOR" | "PRO" | "FLAGSHIP";
 export type UsageFeature = "ANALYZE" | "GENERATE";
@@ -52,6 +53,15 @@ type SubscriptionRow = {
   ecpayMerchantTradeNo?: string | null;
   startDate?: string | null;
   endDate?: string | null;
+};
+
+type PaidOrderRow = {
+  plan: string | null;
+  status: string | null;
+  paidAt: Date | string | null;
+  createdAt: Date | string | null;
+  tradeNo?: string | null;
+  merchantTradeNo?: string | null;
 };
 
 function getSupabaseAdmin() {
@@ -131,18 +141,10 @@ async function getAuthUserFromSupabaseId(supabaseId: string) {
 export async function ensurePublicUserBySupabaseId(
   supabaseId: string
 ): Promise<UserRow | null> {
-  const supabaseAdmin = getSupabaseAdmin();
-
-  const { data: existingUser, error: selectError } = await supabaseAdmin
-    .from("users")
-    .select("id, email, name, avatarUrl, supabaseId")
-    .eq("supabaseId", supabaseId)
-    .maybeSingle();
-
-  if (selectError) {
-    throw new Error(`Failed to load user: ${selectError.message}`);
-  }
-
+  const existingUser = await prisma.user.findUnique({
+    where: { supabaseId },
+    select: { id: true, email: true, name: true, avatarUrl: true, supabaseId: true },
+  });
   if (existingUser) {
     return existingUser as UserRow;
   }
@@ -163,45 +165,37 @@ export async function ensurePublicUserBySupabaseId(
     (authUser.user_metadata?.picture as string | undefined) ||
     null;
 
-  const nowIso = new Date().toISOString();
-  const { data: insertedUser, error: insertError } = await supabaseAdmin
-    .from("users")
-    .insert({
-      id: crypto.randomUUID(),
-      email: fallbackEmail,
-      name: fallbackName,
-      avatarUrl: fallbackAvatar,
-      supabaseId,
-      updatedAt: nowIso,
-    })
-    .select("id, email, name, avatarUrl, supabaseId")
-    .single();
-
-  if (insertError) {
+  try {
+    const insertedUser = await prisma.user.create({
+      data: {
+        id: crypto.randomUUID(),
+        email: fallbackEmail,
+        name: fallbackName,
+        avatarUrl: fallbackAvatar,
+        supabaseId,
+      },
+      select: { id: true, email: true, name: true, avatarUrl: true, supabaseId: true },
+    });
+    return insertedUser as UserRow;
+  } catch (error) {
     // 同 email 已存在（例如重辦帳號）：改為綁定該列到目前登入的 auth
-    const isDuplicateEmail =
-      insertError.code === "23505" ||
-      String(insertError.message || "").includes("users_email_key");
-    if (isDuplicateEmail && fallbackEmail) {
-      const { data: existingByEmail, error: fetchErr } = await supabaseAdmin
-        .from("users")
-        .select("id, email, name, avatarUrl, supabaseId")
-        .eq("email", fallbackEmail)
-        .maybeSingle();
-      if (!fetchErr && existingByEmail) {
-        const { data: updated, error: updateErr } = await supabaseAdmin
-          .from("users")
-          .update({ supabaseId, updatedAt: nowIso })
-          .eq("id", existingByEmail.id)
-          .select("id, email, name, avatarUrl, supabaseId")
-          .single();
-        if (!updateErr && updated) return updated as UserRow;
+    if (fallbackEmail) {
+      const existingByEmail = await prisma.user.findUnique({
+        where: { email: fallbackEmail },
+        select: { id: true, email: true, name: true, avatarUrl: true, supabaseId: true },
+      });
+      if (existingByEmail) {
+        const updated = await prisma.user.update({
+          where: { id: existingByEmail.id },
+          data: { supabaseId },
+          select: { id: true, email: true, name: true, avatarUrl: true, supabaseId: true },
+        });
+        return updated as UserRow;
       }
     }
-    throw new Error(`Failed to create user: ${insertError.message}`);
+    const message = error instanceof Error ? error.message : "unknown";
+    throw new Error(`Failed to create user: ${message}`);
   }
-
-  return insertedUser as UserRow;
 }
 
 async function ensureSubscriptionByInternalUserId(
@@ -270,14 +264,50 @@ async function ensureSubscriptionByInternalUserId(
 async function getSubscriptionReadOnly(
   internalUserId: string
 ): Promise<SubscriptionRow | null> {
-  const supabaseAdmin = getSupabaseAdmin();
-  const { data, error } = await supabaseAdmin
-    .from("subscriptions")
-    .select("id, userId, plan, status, ecpayTradeNo, ecpayMerchantTradeNo, startDate, endDate")
-    .eq("userId", internalUserId)
-    .maybeSingle();
-  if (error || !data) return null;
-  return data as SubscriptionRow;
+  const data = await prisma.subscription.findUnique({
+    where: { userId: internalUserId },
+    select: {
+      id: true,
+      userId: true,
+      plan: true,
+      status: true,
+      ecpayTradeNo: true,
+      ecpayMerchantTradeNo: true,
+      startDate: true,
+      endDate: true,
+    },
+  });
+  if (!data) return null;
+  return {
+    id: data.id,
+    userId: data.userId,
+    plan: String(data.plan).toUpperCase() as PlanName,
+    status: String(data.status).toUpperCase(),
+    ecpayTradeNo: data.ecpayTradeNo ?? null,
+    ecpayMerchantTradeNo: data.ecpayMerchantTradeNo ?? null,
+    startDate: data.startDate?.toISOString() ?? null,
+    endDate: data.endDate?.toISOString() ?? null,
+  };
+}
+
+async function getLatestPaidOrderByInternalUserId(
+  internalUserId: string
+): Promise<PaidOrderRow | null> {
+  const rows = await prisma.$queryRaw<PaidOrderRow[]>`
+    SELECT
+      plan,
+      status,
+      "paidAt" as "paidAt",
+      "createdAt" as "createdAt",
+      "tradeNo" as "tradeNo",
+      "merchantTradeNo" as "merchantTradeNo"
+    FROM orders
+    WHERE "userId" = ${internalUserId}
+      AND status IN ('PAID', 'SUCCESS')
+    ORDER BY "paidAt" DESC NULLS LAST, "createdAt" DESC
+    LIMIT 1
+  `;
+  return rows[0] ?? null;
 }
 
 async function normalizeSubscriptionState(
@@ -301,25 +331,39 @@ async function normalizeSubscriptionState(
     return subscription;
   }
 
-  const supabaseAdmin = getSupabaseAdmin();
-  const updateTime = now.toISOString();
-
-  const { data: updatedSubscription, error } = await supabaseAdmin
-    .from("subscriptions")
-    .update({
-      plan: "FREE",
-      status: "EXPIRED",
-      updatedAt: updateTime,
-    })
-    .eq("id", subscription.id)
-    .select("id, userId, plan, status, ecpayTradeNo, ecpayMerchantTradeNo, startDate, endDate")
-    .single();
-
-  if (error || !updatedSubscription) {
+  const updateTime = now;
+  try {
+    const updatedSubscription = await prisma.subscription.update({
+      where: { id: subscription.id },
+      data: {
+        plan: "FREE" as any,
+        status: "EXPIRED" as any,
+        updatedAt: updateTime,
+      },
+      select: {
+        id: true,
+        userId: true,
+        plan: true,
+        status: true,
+        ecpayTradeNo: true,
+        ecpayMerchantTradeNo: true,
+        startDate: true,
+        endDate: true,
+      },
+    });
+    return {
+      id: updatedSubscription.id,
+      userId: updatedSubscription.userId,
+      plan: String(updatedSubscription.plan).toUpperCase() as PlanName,
+      status: String(updatedSubscription.status).toUpperCase(),
+      ecpayTradeNo: updatedSubscription.ecpayTradeNo ?? null,
+      ecpayMerchantTradeNo: updatedSubscription.ecpayMerchantTradeNo ?? null,
+      startDate: updatedSubscription.startDate?.toISOString() ?? null,
+      endDate: updatedSubscription.endDate?.toISOString() ?? null,
+    };
+  } catch {
     return subscription;
   }
-
-  return updatedSubscription as SubscriptionRow;
 }
 
 async function getUserContext(supabaseId: string): Promise<{
@@ -363,17 +407,8 @@ async function getUserContext(supabaseId: string): Promise<{
     isPaidPlan && !isExplicitlyInactive && hasPaymentEvidence ? planNormalized : "FREE";
 
   // 升級情境：若最新 PAID 訂單方案更高，就以訂單為準
-  const supabaseAdmin = getSupabaseAdmin();
-  const { data: paidOrder } = await supabaseAdmin
-    .from("orders")
-    .select("plan, status, paidAt, createdAt")
-    .eq("userId", publicUser.id)
-    .in("status", ["PAID", "SUCCESS"])
-    .order("paidAt", { ascending: false, nullsFirst: false })
-    .order("createdAt", { ascending: false })
-    .limit(1)
-    .maybeSingle();
-  const paidPlan = String((paidOrder as any)?.plan || "").trim().toUpperCase() as PlanName;
+  const paidOrder = await getLatestPaidOrderByInternalUserId(publicUser.id);
+  const paidPlan = String(paidOrder?.plan || "").trim().toUpperCase() as PlanName;
   const isPaidOrderPlan =
     paidPlan === "CREATOR" || paidPlan === "PRO" || paidPlan === "FLAGSHIP";
   if (isPaidOrderPlan && PLAN_LEVEL[paidPlan] > PLAN_LEVEL[plan]) {
@@ -398,13 +433,11 @@ export async function getPlanForSupabaseIdSafe(supabaseId: string): Promise<Plan
   try {
     const publicUser = await ensurePublicUserBySupabaseId(supabaseId);
     if (!publicUser?.id) return "FREE";
-    const supabaseAdmin = getSupabaseAdmin();
-    const { data: sub, error } = await supabaseAdmin
-      .from("subscriptions")
-      .select("plan, status, endDate")
-      .eq("userId", publicUser.id)
-      .maybeSingle();
-    if (error || !sub) return "FREE";
+    const sub = await prisma.subscription.findUnique({
+      where: { userId: publicUser.id },
+      select: { plan: true, status: true, endDate: true },
+    });
+    if (!sub) return "FREE";
     const plan = String(sub.plan || "FREE").trim().toUpperCase() as PlanName;
     const status = String(sub.status || "").trim().toUpperCase();
     const endDate = sub.endDate ? new Date(sub.endDate) : null;
@@ -462,8 +495,6 @@ export type UsageSnapshot = {
 export async function getUsageSnapshotForSupabaseId(
   supabaseId: string
 ): Promise<UsageSnapshot> {
-  const supabaseAdmin = getSupabaseAdmin();
-
   // 對齊 public.users（同 email 會 re-link），再用 internal userId 查 subscriptions
   const publicUser = await ensurePublicUserBySupabaseId(supabaseId);
   let internalUserId = publicUser?.id || null;
@@ -483,28 +514,18 @@ export async function getUsageSnapshotForSupabaseId(
   let paidTradeNo: string | null = null;
   let paidMerchantTradeNo: string | null = null;
   if (internalUserId) {
-    const { data: paidOrder } = await supabaseAdmin
-      .from("orders")
-      .select("plan, status, paidAt, createdAt, tradeNo, merchantTradeNo")
-      .eq("userId", internalUserId)
-      .in("status", ["PAID", "SUCCESS"])
-      .order("paidAt", { ascending: false, nullsFirst: false })
-      .order("createdAt", { ascending: false })
-      .limit(1)
-      .maybeSingle();
-
-    const p = String((paidOrder as any)?.plan || "").trim().toUpperCase();
+    const paidOrder = await getLatestPaidOrderByInternalUserId(internalUserId);
+    const p = String(paidOrder?.plan || "").trim().toUpperCase();
     const isPaidPlan =
       p === "CREATOR" || p === "PRO" || p === "FLAGSHIP";
     if (isPaidPlan) {
       paidPlanFromOrders = p as PlanName;
-      paidAtAnchor =
-        (paidOrder as any)?.paidAt ||
-        (paidOrder as any)?.createdAt ||
-        null;
-      paidTradeNo = (paidOrder as any)?.tradeNo ? String((paidOrder as any).tradeNo) : null;
-      paidMerchantTradeNo = (paidOrder as any)?.merchantTradeNo
-        ? String((paidOrder as any).merchantTradeNo)
+      paidAtAnchor = paidOrder?.paidAt ? new Date(paidOrder.paidAt).toISOString() : (
+        paidOrder?.createdAt ? new Date(paidOrder.createdAt).toISOString() : null
+      );
+      paidTradeNo = paidOrder?.tradeNo ? String(paidOrder.tradeNo) : null;
+      paidMerchantTradeNo = paidOrder?.merchantTradeNo
+        ? String(paidOrder.merchantTradeNo)
         : null;
     }
   }
@@ -543,28 +564,32 @@ export async function getUsageSnapshotForSupabaseId(
     }
     if (subscription?.id) {
       // 更新現有 subscription
-      const updatePayload: Record<string, unknown> = {
-        plan: paidPlanFromOrders,
-        status: "ACTIVE",
-        updatedAt: nowIso,
-      };
-      if (paidTradeNo) updatePayload.ecpayTradeNo = paidTradeNo;
-      if (paidMerchantTradeNo) updatePayload.ecpayMerchantTradeNo = paidMerchantTradeNo;
-      if (cycleEndForSub) updatePayload.endDate = cycleEndForSub;
-      await supabaseAdmin.from("subscriptions").update(updatePayload).eq("id", subscription.id);
+      await prisma.subscription.update({
+        where: { id: subscription.id },
+        data: {
+          plan: paidPlanFromOrders as any,
+          status: "ACTIVE" as any,
+          updatedAt: new Date(nowIso),
+          ...(paidTradeNo ? { ecpayTradeNo: paidTradeNo } : {}),
+          ...(paidMerchantTradeNo ? { ecpayMerchantTradeNo: paidMerchantTradeNo } : {}),
+          ...(cycleEndForSub ? { endDate: new Date(cycleEndForSub) } : {}),
+        },
+      });
     } else if (internalUserId) {
       // 建立新 subscription（billing 來不及 self-heal 時由 usage 補建）
-      await supabaseAdmin.from("subscriptions").insert({
-        id: crypto.randomUUID(),
-        userId: internalUserId,
-        plan: paidPlanFromOrders,
-        status: "ACTIVE",
-        startDate: paidAtAnchor || nowIso,
-        endDate: cycleEndForSub,
-        ecpayTradeNo: paidTradeNo || null,
-        ecpayMerchantTradeNo: paidMerchantTradeNo || null,
-        createdAt: nowIso,
-        updatedAt: nowIso,
+      await prisma.subscription.create({
+        data: {
+          id: crypto.randomUUID(),
+          userId: internalUserId,
+          plan: paidPlanFromOrders as any,
+          status: "ACTIVE" as any,
+          startDate: new Date(paidAtAnchor || nowIso),
+          endDate: cycleEndForSub ? new Date(cycleEndForSub) : null,
+          ecpayTradeNo: paidTradeNo || null,
+          ecpayMerchantTradeNo: paidMerchantTradeNo || null,
+          createdAt: new Date(nowIso),
+          updatedAt: new Date(nowIso),
+        },
       });
     }
   }
@@ -577,27 +602,27 @@ export async function getUsageSnapshotForSupabaseId(
   weekStart.setDate(weekStart.getDate() - 7);
   const weekStartIso = weekStart.toISOString();
 
-  const [{ data: cycleLogs, error: cycleErr }, { data: weekLogs, error: weekErr }] =
-    await Promise.all([
-      supabaseAdmin
-        .from("usage_logs")
-        .select("action, createdAt")
-        .eq("userId", supabaseId)
-        .gte("createdAt", cycleStart)
-        .lt("createdAt", cycleEnd),
-      supabaseAdmin
-        .from("usage_logs")
-        .select("action, createdAt")
-        .eq("userId", supabaseId)
-        .gte("createdAt", weekStartIso),
-    ]);
-
-  if (cycleErr) {
-    throw new Error(`Failed to check usage: ${cycleErr.message}`);
-  }
-  if (weekErr) {
-    throw new Error(`Failed to check week usage: ${weekErr.message}`);
-  }
+  const [cycleLogs, weekLogs] = await Promise.all([
+    prisma.usageLog.findMany({
+      where: {
+        userId: supabaseId,
+        createdAt: {
+          gte: new Date(cycleStart),
+          lt: new Date(cycleEnd),
+        },
+      },
+      select: { action: true, createdAt: true },
+    }),
+    prisma.usageLog.findMany({
+      where: {
+        userId: supabaseId,
+        createdAt: {
+          gte: new Date(weekStartIso),
+        },
+      },
+      select: { action: true, createdAt: true },
+    }),
+  ]);
 
   const usedAnalyze =
     (cycleLogs || []).filter((row: any) => getActionGroup(row.action) === "ANALYZE")
@@ -666,7 +691,6 @@ export async function checkUsageLimit(
       cycleEnd: string;
     }
 > {
-  const supabaseAdmin = getSupabaseAdmin();
   const { plan, subscription } = await getUserContext(supabaseId);
   const limit = LIMITS[plan][feature];
 
@@ -674,16 +698,16 @@ export async function checkUsageLimit(
     subscription?.startDate ?? null
   );
 
-  const { data, error } = await supabaseAdmin
-    .from("usage_logs")
-    .select("action, createdAt")
-    .eq("userId", supabaseId)
-    .gte("createdAt", cycleStart)
-    .lt("createdAt", cycleEnd);
-
-  if (error) {
-    throw new Error(`Failed to check usage: ${error.message}`);
-  }
+  const data = await prisma.usageLog.findMany({
+    where: {
+      userId: supabaseId,
+      createdAt: {
+        gte: new Date(cycleStart),
+        lt: new Date(cycleEnd),
+      },
+    },
+    select: { action: true, createdAt: true },
+  });
 
   const used =
     (data || []).filter((row) => getActionGroup(row.action) === feature)
@@ -723,20 +747,19 @@ export async function getWeekUsage(supabaseId: string): Promise<{
   analyze: number;
   generate: number;
 }> {
-  const supabaseAdmin = getSupabaseAdmin();
   const weekStart = new Date();
   weekStart.setDate(weekStart.getDate() - 7);
   const startIso = weekStart.toISOString();
 
-  const { data, error } = await supabaseAdmin
-    .from("usage_logs")
-    .select("action")
-    .eq("userId", supabaseId)
-    .gte("createdAt", startIso);
-
-  if (error) {
-    return { analyze: 0, generate: 0 };
-  }
+  const data = await prisma.usageLog.findMany({
+    where: {
+      userId: supabaseId,
+      createdAt: {
+        gte: new Date(startIso),
+      },
+    },
+    select: { action: true },
+  });
 
   let analyze = 0;
   let generate = 0;
@@ -752,18 +775,14 @@ export async function logUsage(
   userId: string,
   action: UsageAction
 ): Promise<void> {
-  const supabaseAdmin = getSupabaseAdmin();
-  const now = new Date().toISOString();
-
-  const { error } = await supabaseAdmin.from("usage_logs").insert({
-    id: crypto.randomUUID(),
-    userId,
-    action,
-    date: now,
-    createdAt: now,
+  const now = new Date();
+  await prisma.usageLog.create({
+    data: {
+      id: crypto.randomUUID(),
+      userId,
+      action: action as any,
+      date: now,
+      createdAt: now,
+    },
   });
-
-  if (error) {
-    throw new Error(`Failed to log usage: ${error.message}`);
-  }
 }

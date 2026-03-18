@@ -1,31 +1,9 @@
 import { NextResponse } from "next/server";
-import { createClient } from "@supabase/supabase-js";
 import { getUserIdFromRequest, ensurePublicUserBySupabaseId } from "@/lib/usage-checker";
-import crypto from "crypto";
+import { prisma } from "@/lib/prisma";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
-
-function getSupabaseAdmin() {
-  return createClient(
-    process.env.NEXT_PUBLIC_SUPABASE_URL!,
-    process.env.SUPABASE_SERVICE_ROLE_KEY!
-  );
-}
-
-function getSupabaseKeyRole() {
-  try {
-    const token = process.env.SUPABASE_SERVICE_ROLE_KEY || "";
-    const payload = token.split(".")[1];
-    if (!payload) return "unknown";
-    const normalized = payload.replace(/-/g, "+").replace(/_/g, "/");
-    const padded = normalized.padEnd(normalized.length + ((4 - (normalized.length % 4)) % 4), "=");
-    const decoded = JSON.parse(Buffer.from(padded, "base64").toString("utf8"));
-    return String(decoded?.role || decoded?.app_metadata?.role || "unknown");
-  } catch {
-    return "unknown";
-  }
-}
 
 const PLAN_LABELS: Record<string, string> = {
   FREE: "免費方案",
@@ -46,6 +24,17 @@ const PLAN_LEVEL: Record<string, number> = {
   CREATOR: 1,
   PRO: 2,
   FLAGSHIP: 3,
+};
+
+type OrderRow = {
+  id: string;
+  plan: string;
+  billingCycle: string;
+  amount: number | string | null;
+  status: string;
+  createdAt: Date | string;
+  paidAt: Date | string | null;
+  merchantTradeNo: string | null;
 };
 
 function getCycleMonths(cycle: string) {
@@ -71,8 +60,6 @@ export async function GET(req: Request) {
       return NextResponse.json({ error: "未登入" }, { status: 401 });
     }
 
-    const supabaseAdmin = getSupabaseAdmin();
-
     // 新註冊用戶可能尚未有 public.users 列，先同步建立
     const publicUser = await ensurePublicUserBySupabaseId(supabaseId);
     if (!publicUser?.id) {
@@ -82,44 +69,33 @@ export async function GET(req: Request) {
       );
     }
 
-    const { data: subscription, error: subError } = await supabaseAdmin
-      .from("subscriptions")
-      .select("id, plan, status, startDate, endDate")
-      .eq("userId", publicUser.id)
-      .maybeSingle();
-
-    if (subError) {
-      console.error("[billing] subscription query error:", subError.code, subError.message);
-      return NextResponse.json(
-        { error: "讀取訂閱失敗" },
-        { status: 500 }
-      );
-    }
-
-    const { data: orders, error: ordersError } = await supabaseAdmin
-      .from("orders")
-      .select("id, plan, billingCycle, amount, status, createdAt, paidAt, merchantTradeNo")
-      .eq("userId", publicUser.id)
-      .order("createdAt", { ascending: false })
-      .limit(50);
-
-    if (ordersError) {
-      console.error("[billing] orders query error:", ordersError.code, ordersError.message, ordersError.hint);
-      return NextResponse.json(
-        { error: "讀取訂單失敗", _detail: ordersError.message },
-        { status: 500 }
-      );
-    }
-    if (!orders || orders.length === 0) {
-      console.error(
-        "[billing] orders empty for userId:",
-        publicUser.id,
-        "supabaseUrl:",
-        process.env.NEXT_PUBLIC_SUPABASE_URL?.slice(0, 50),
-        "serviceRoleKeyRole:",
-        getSupabaseKeyRole()
-      );
-    }
+    const [subscription, orders] = await Promise.all([
+      prisma.subscription.findUnique({
+        where: { userId: publicUser.id },
+        select: {
+          id: true,
+          plan: true,
+          status: true,
+          startDate: true,
+          endDate: true,
+        },
+      }),
+      prisma.$queryRaw<OrderRow[]>`
+        SELECT
+          id,
+          plan,
+          "billingCycle" as "billingCycle",
+          amount,
+          status,
+          "createdAt" as "createdAt",
+          "paidAt" as "paidAt",
+          "merchantTradeNo" as "merchantTradeNo"
+        FROM orders
+        WHERE "userId" = ${publicUser.id}
+        ORDER BY "createdAt" DESC
+        LIMIT 50
+      `,
+    ]);
 
     let plan = "FREE";
     let status = "FREE";
@@ -130,8 +106,8 @@ export async function GET(req: Request) {
     if (subscription) {
       plan = String(subscription.plan || "FREE").trim().toUpperCase();
       status = String(subscription.status || "").trim().toUpperCase();
-      startDate = subscription.startDate ?? null;
-      endDate = subscription.endDate ?? null;
+      startDate = subscription.startDate?.toISOString() ?? null;
+      endDate = subscription.endDate?.toISOString() ?? null;
       if (endDate && new Date(endDate) <= new Date()) {
         status = "EXPIRED";
       }
@@ -144,9 +120,9 @@ export async function GET(req: Request) {
     // 2) Prefer latest PAID/SUCCESS order when it is higher than subscription (upgrade case),
     // or when subscription is missing/invalid.
     const latestPaid = (orders || []).find((o) =>
-      ["PAID", "SUCCESS"].includes(String((o as any)?.status || "").toUpperCase())
+      ["PAID", "SUCCESS"].includes(String(o?.status || "").toUpperCase())
     );
-    const latestPaidPlan = String((latestPaid as any)?.plan || "FREE").trim().toUpperCase();
+    const latestPaidPlan = String(latestPaid?.plan || "FREE").trim().toUpperCase();
     const isLatestPaidPlan =
       latestPaidPlan === "CREATOR" || latestPaidPlan === "PRO" || latestPaidPlan === "FLAGSHIP";
 
@@ -158,8 +134,8 @@ export async function GET(req: Request) {
     if (shouldUsePaidOrder) {
       plan = latestPaidPlan;
       status = "ACTIVE";
-      const anchorIso = (latestPaid as any)?.paidAt || (latestPaid as any)?.createdAt || null;
-      const cycle = String((latestPaid as any)?.billingCycle || "monthly");
+      const anchorIso = latestPaid?.paidAt || latestPaid?.createdAt || null;
+      const cycle = String(latestPaid?.billingCycle || "monthly");
       const months = getCycleMonths(cycle);
       if (anchorIso) {
         const anchor = new Date(anchorIso);
@@ -170,30 +146,24 @@ export async function GET(req: Request) {
       }
 
       // best-effort: self-heal subscription row to avoid future mismatches
-      const nowIso = new Date().toISOString();
-      if (subscription?.id) {
-        await supabaseAdmin
-          .from("subscriptions")
-          .update({
-            plan,
-            status: "ACTIVE",
-            startDate: startDate || nowIso,
-            endDate,
-            updatedAt: nowIso,
-          })
-          .eq("id", subscription.id);
-      } else {
-        await supabaseAdmin.from("subscriptions").insert({
-          id: crypto.randomUUID(),
-          userId: publicUser.id,
-          plan,
-          status: "ACTIVE",
-          startDate: startDate || nowIso,
-          endDate,
-          createdAt: nowIso,
+      const nowIso = new Date();
+      await prisma.subscription.upsert({
+        where: { userId: publicUser.id },
+        update: {
+          plan: plan as any,
+          status: "ACTIVE" as any,
+          startDate: startDate ? new Date(startDate) : nowIso,
+          endDate: endDate ? new Date(endDate) : null,
           updatedAt: nowIso,
-        });
-      }
+        },
+        create: {
+          userId: publicUser.id,
+          plan: plan as any,
+          status: "ACTIVE" as any,
+          startDate: startDate ? new Date(startDate) : nowIso,
+          endDate: endDate ? new Date(endDate) : null,
+        },
+      });
     }
 
     const url = new URL(req.url);
@@ -209,7 +179,6 @@ export async function GET(req: Request) {
       },
       ...(debugMode && {
         _debug: {
-          supabaseUrl: (process.env.NEXT_PUBLIC_SUPABASE_URL || "").slice(0, 40),
           internalUserId: publicUser.id,
           supabaseId,
           ordersCount: (orders || []).length,
@@ -222,10 +191,10 @@ export async function GET(req: Request) {
         planLabel: PLAN_LABELS[String(o.plan).toUpperCase()] || o.plan,
         billingCycle: o.billingCycle,
         cycleLabel: CYCLE_LABELS[String(o.billingCycle)] || o.billingCycle,
-        amount: Number(o.amount),
+        amount: Number(o.amount || 0),
         status: o.status,
-        createdAt: o.createdAt,
-        paidAt: o.paidAt ?? null,
+        createdAt: new Date(o.createdAt).toISOString(),
+        paidAt: o.paidAt ? new Date(o.paidAt).toISOString() : null,
         merchantTradeNo: o.merchantTradeNo ?? null,
       })),
     });
