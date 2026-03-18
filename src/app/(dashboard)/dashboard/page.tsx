@@ -13,9 +13,12 @@ interface UsageItem {
 
 interface UsageResponse {
   plan: string
+  subscriptionEndDate?: string | null
+  subscriptionStatus?: string | null
   usage: {
     analyze: UsageItem
     generate: UsageItem
+    cycleEnd?: string | null
     week?: { analyze: number; generate: number }
   }
 }
@@ -23,9 +26,12 @@ interface UsageResponse {
 export default function DashboardPage() {
   const [data, setData] = useState<UsageResponse>({
     plan: 'FREE',
+    subscriptionEndDate: null,
+    subscriptionStatus: null,
     usage: {
       analyze: { used: 0, limit: 3, remaining: 3 },
       generate: { used: 0, limit: 3, remaining: 3 },
+      cycleEnd: null,
     },
   })
 
@@ -95,6 +101,8 @@ export default function DashboardPage() {
 
         setData({
           plan: effectivePlan,
+          subscriptionEndDate: billingJson?.subscription?.endDate ?? null,
+          subscriptionStatus: billingJson?.subscription?.status ?? null,
           usage: {
             analyze: {
               used: analyzeUsed,
@@ -106,6 +114,7 @@ export default function DashboardPage() {
               limit: correctLimit,
               remaining: Math.max(0, correctLimit - generateUsed),
             },
+            cycleEnd: json.usage?.analyze?.cycleEnd ?? null,
             week: json.usage?.week
               ? { analyze: json.usage.week.analyze ?? 0, generate: json.usage.week.generate ?? 0 }
               : undefined,
@@ -134,6 +143,8 @@ export default function DashboardPage() {
 
       setData((prev) => ({
         plan: detail.plan || prev.plan || 'FREE',
+        subscriptionEndDate: prev.subscriptionEndDate ?? null,
+        subscriptionStatus: prev.subscriptionStatus ?? null,
         usage: {
           analyze: {
             used: detail.usage?.analyze?.used ?? prev.usage.analyze.used ?? 0,
@@ -145,6 +156,11 @@ export default function DashboardPage() {
             limit: detail.usage?.generate?.limit ?? prev.usage.generate.limit ?? 3,
             remaining: detail.usage?.generate?.remaining ?? prev.usage.generate.remaining ?? 3,
           },
+          cycleEnd:
+            detail.usage?.analyze?.cycleEnd ??
+            detail.usage?.generate?.cycleEnd ??
+            prev.usage.cycleEnd ??
+            null,
           week: detail.usage?.week
             ? {
                 analyze: detail.usage.week.analyze ?? prev.usage.week?.analyze ?? 0,
@@ -171,6 +187,31 @@ export default function DashboardPage() {
   const totalUsed = analyze.used + generate.used
   const totalLimit = analyze.limit + generate.limit
   const totalRemaining = Math.max(totalLimit - totalUsed, 0)
+  const cycleEnd = data.usage.cycleEnd || data.subscriptionEndDate || null
+
+  const formatDate = (iso?: string | null) => {
+    if (!iso) return '—'
+    const d = new Date(iso)
+    if (Number.isNaN(d.getTime())) return '—'
+    return d.toLocaleDateString('zh-TW', {
+      year: 'numeric',
+      month: '2-digit',
+      day: '2-digit',
+    })
+  }
+
+  const getDaysUntil = (iso?: string | null) => {
+    if (!iso) return null
+    const d = new Date(iso)
+    if (Number.isNaN(d.getTime())) return null
+    return Math.ceil((d.getTime() - Date.now()) / (1000 * 60 * 60 * 24))
+  }
+
+  const daysUntilExpiry = getDaysUntil(cycleEnd)
+  const isPaidPlan = data.plan !== 'FREE'
+  const isExpiringSoon =
+    isPaidPlan && daysUntilExpiry !== null && daysUntilExpiry >= 0 && daysUntilExpiry <= 7
+  const isExpired = data.subscriptionStatus === 'EXPIRED' || (isPaidPlan && daysUntilExpiry !== null && daysUntilExpiry < 0)
 
   const percent =
     totalLimit > 0 ? Math.min(100, (totalUsed / totalLimit) * 100) : 0
@@ -186,6 +227,7 @@ export default function DashboardPage() {
     FREE: '免費試用',
     CREATOR: '創作者版',
     PRO: '專業版',
+    FLAGSHIP: '旗艦版',
   }
 
   return (
@@ -194,6 +236,45 @@ export default function DashboardPage() {
         <h1 className="text-4xl font-black mb-2">控制台</h1>
         <p className="text-white/40">歡迎回來，你可以開始分析爆款內容。</p>
       </div>
+
+      {!loading && isExpiringSoon && (
+        <div className="rounded-2xl bg-amber-500/10 border border-amber-500/20 px-5 py-4">
+          <div className="flex items-start justify-between gap-4 flex-wrap">
+            <div>
+              <p className="font-bold text-amber-300 mb-1">訂閱即將到期</p>
+              <p className="text-sm text-white/70">
+                你的方案將於 {formatDate(cycleEnd)} 到期，約剩 {daysUntilExpiry} 天。
+                到期後會回到免費方案，如要繼續使用請手動重新訂閱。
+              </p>
+            </div>
+            <Link
+              href="/plans"
+              className="bg-brand-500 hover:bg-brand-400 text-white px-4 py-2 rounded-xl font-bold text-sm transition-colors"
+            >
+              前往續訂
+            </Link>
+          </div>
+        </div>
+      )}
+
+      {!loading && isExpired && (
+        <div className="rounded-2xl bg-red-500/10 border border-red-500/20 px-5 py-4">
+          <div className="flex items-start justify-between gap-4 flex-wrap">
+            <div>
+              <p className="font-bold text-red-300 mb-1">訂閱已到期</p>
+              <p className="text-sm text-white/70">
+                你目前已回到免費方案。若要恢復付費額度，請到方案頁重新訂閱。
+              </p>
+            </div>
+            <Link
+              href="/plans"
+              className="bg-brand-500 hover:bg-brand-400 text-white px-4 py-2 rounded-xl font-bold text-sm transition-colors"
+            >
+              重新訂閱
+            </Link>
+          </div>
+        </div>
+      )}
 
       <div className="glass rounded-2xl p-6">
         <div className="flex items-center justify-between mb-4 flex-wrap gap-2">
@@ -244,7 +325,7 @@ export default function DashboardPage() {
 
         <div className="mt-4 pt-4 border-t border-white/5 text-xs text-white/30 space-y-1">
           <p>免費版總額度為 6 次：分析 3 次 + 生成 3 次</p>
-          <p>每月 1 日重置，未使用次數不累計至下個月</p>
+          <p>依目前訂閱週期計算，到期後會回到免費方案；未使用次數不累計至下期</p>
         </div>
       </div>
 
