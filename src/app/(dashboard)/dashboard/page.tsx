@@ -56,39 +56,55 @@ export default function DashboardPage() {
           return
         }
 
-        const res = await fetch('/api/usage', {
+        // 先跑 billing（self-heal 訂閱），再跑 usage（確保方案一致）
+        const PLAN_LEVEL_MAP: Record<string, number> = { FREE: 0, CREATOR: 1, PRO: 2, FLAGSHIP: 3 }
+        const PLAN_LIMITS_MAP: Record<string, number> = { FREE: 3, CREATOR: 50, PRO: 200, FLAGSHIP: 500 }
+
+        const billingRes = await fetch('/api/billing', {
+          headers: { Authorization: `Bearer ${token}` },
+        })
+        const billingJson = billingRes.ok ? await billingRes.json() : null
+        const billingPlan = String(billingJson?.subscription?.plan || 'FREE').trim().toUpperCase()
+
+        const usageRes = await fetch('/api/usage', {
           method: 'GET',
-          headers: {
-            Authorization: `Bearer ${token}`,
-          },
+          headers: { Authorization: `Bearer ${token}` },
         })
 
-        if (res.status === 401) {
+        if (usageRes.status === 401) {
           window.location.href = `/login?redirect=${encodeURIComponent('/dashboard')}`
           return
         }
 
-        const json = await res.json()
+        const json = await usageRes.json()
 
-        if (!res.ok) {
+        if (!usageRes.ok) {
           console.error('讀取 usage 失敗:', json)
           return
         }
 
         if (!mounted) return
 
+        const usagePlan = String(json.plan || 'FREE').trim().toUpperCase()
+        // 取較高方案
+        const effectivePlan = (PLAN_LEVEL_MAP[billingPlan] ?? 0) >= (PLAN_LEVEL_MAP[usagePlan] ?? 0)
+          ? billingPlan : usagePlan
+        const correctLimit = PLAN_LIMITS_MAP[effectivePlan] ?? 3
+        const analyzeUsed = json.usage?.analyze?.used || 0
+        const generateUsed = json.usage?.generate?.used || 0
+
         setData({
-          plan: json.plan || 'FREE',
+          plan: effectivePlan,
           usage: {
             analyze: {
-              used: json.usage?.analyze?.used || 0,
-              limit: json.usage?.analyze?.limit || 3,
-              remaining: json.usage?.analyze?.remaining ?? 3,
+              used: analyzeUsed,
+              limit: correctLimit,
+              remaining: Math.max(0, correctLimit - analyzeUsed),
             },
             generate: {
-              used: json.usage?.generate?.used || 0,
-              limit: json.usage?.generate?.limit || 3,
-              remaining: json.usage?.generate?.remaining ?? 3,
+              used: generateUsed,
+              limit: correctLimit,
+              remaining: Math.max(0, correctLimit - generateUsed),
             },
             week: json.usage?.week
               ? { analyze: json.usage.week.analyze ?? 0, generate: json.usage.week.generate ?? 0 }

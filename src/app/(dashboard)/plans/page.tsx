@@ -101,19 +101,30 @@ export default function PlansPage() {
       try {
         const authHeader = await getAuthHeader()
 
+        // 先跑 billing（self-heal），再跑 usage，取較高方案
+        const PLAN_LEVEL_LOCAL: Record<string, number> = { FREE: 0, CREATOR: 1, PRO: 2, FLAGSHIP: 3 }
+
+        const billingRes = await fetch('/api/billing', { headers: authHeader })
+        const billingJson = billingRes.ok ? await billingRes.json() : null
+        const billingPlan = String(billingJson?.subscription?.plan || 'FREE').trim().toUpperCase()
+
         const res = await fetch('/api/usage', {
           method: 'GET',
-          headers: {
-            ...authHeader,
-          },
+          headers: { ...authHeader },
         })
 
-        if (!res.ok) return
+        if (!res.ok) {
+          if (billingPlan !== 'FREE') setCurrentPlan(billingPlan)
+          return
+        }
 
         const data = await res.json()
+        const usagePlan = String(data?.plan || 'FREE').trim().toUpperCase()
+        const effectivePlan = (PLAN_LEVEL_LOCAL[billingPlan] ?? 0) >= (PLAN_LEVEL_LOCAL[usagePlan] ?? 0)
+          ? billingPlan : usagePlan
 
-        if (data?.plan) {
-          setCurrentPlan(data.plan)
+        if (effectivePlan) {
+          setCurrentPlan(effectivePlan)
         }
       } catch {
         // 避免 plans 頁因 usage 讀取失敗整頁中斷
