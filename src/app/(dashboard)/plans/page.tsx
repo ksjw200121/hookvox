@@ -267,7 +267,7 @@ export default function PlansPage() {
       <div className="rounded-2xl border border-brand-500/20 bg-brand-500/10 p-4 text-sm text-white/70 leading-relaxed">
         <p className="font-medium text-white mb-1">訂閱規則說明</p>
         <p>免費升級到付費方案會開啟新週期並重置額度。</p>
-        <p>付費方案升級到更高方案時，會用目標方案原價扣掉你目前方案已付款金額，例如 Pro 年繳 15350 減 Creator 月繳 699。</p>
+        <p>付費方案升級到更高方案時，會用目標方案原價扣掉你目前方案已付款金額，例如 Pro 月繳 1599 減 Creator 月繳 699。</p>
         <p>目前尚未開放自動定期定額；到期後若要繼續使用，需手動重新訂閱。</p>
       </div>
 

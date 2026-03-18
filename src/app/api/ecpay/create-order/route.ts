@@ -273,7 +273,7 @@ export async function POST(req: Request) {
     const merchantTradeNo = makeMerchantTradeNo(supabaseId);
 
     // 升級：以目標方案全額扣掉目前方案已付款金額。
-    // 例如 Creator 月繳 699 -> Pro 年繳 15350，則收 15350 - 699。
+    // 例如 Creator 月繳 699 -> Pro 月繳 1599，則收 1599 - 699。
     // 到期後再買：currentPlan 會回 FREE，收方案全額。
     const isUpgrade =
       currentPlan !== "FREE" && PLAN_LEVEL[plan] > PLAN_LEVEL[currentPlan];
