@@ -42,6 +42,7 @@ type UserRow = {
   name?: string | null;
   avatarUrl?: string | null;
   supabaseId: string;
+  createdAt?: Date | null;
 };
 
 type SubscriptionRow = {
@@ -58,6 +59,7 @@ type SubscriptionRow = {
 type PaidOrderRow = {
   plan: string | null;
   status: string | null;
+  billingCycle?: string | null;
   paidAt: Date | string | null;
   createdAt: Date | string | null;
   tradeNo?: string | null;
@@ -75,6 +77,13 @@ function addOneMonth(date: Date): Date {
   const next = new Date(date);
   next.setMonth(next.getMonth() + 1);
   return next;
+}
+
+function getBillingCycleMonths(billingCycle?: string | null) {
+  if (billingCycle === "quarterly") return 3;
+  if (billingCycle === "biannual") return 6;
+  if (billingCycle === "annual") return 12;
+  return 1;
 }
 
 function getCurrentCycleWindow(anchorInput?: string | null): {
@@ -143,7 +152,7 @@ export async function ensurePublicUserBySupabaseId(
 ): Promise<UserRow | null> {
   const existingUser = await prisma.user.findUnique({
     where: { supabaseId },
-    select: { id: true, email: true, name: true, avatarUrl: true, supabaseId: true },
+    select: { id: true, email: true, name: true, avatarUrl: true, supabaseId: true, createdAt: true },
   });
   if (existingUser) {
     return existingUser as UserRow;
@@ -174,7 +183,7 @@ export async function ensurePublicUserBySupabaseId(
         avatarUrl: fallbackAvatar,
         supabaseId,
       },
-      select: { id: true, email: true, name: true, avatarUrl: true, supabaseId: true },
+      select: { id: true, email: true, name: true, avatarUrl: true, supabaseId: true, createdAt: true },
     });
     return insertedUser as UserRow;
   } catch (error) {
@@ -182,13 +191,13 @@ export async function ensurePublicUserBySupabaseId(
     if (fallbackEmail) {
       const existingByEmail = await prisma.user.findUnique({
         where: { email: fallbackEmail },
-        select: { id: true, email: true, name: true, avatarUrl: true, supabaseId: true },
+        select: { id: true, email: true, name: true, avatarUrl: true, supabaseId: true, createdAt: true },
       });
       if (existingByEmail) {
         const updated = await prisma.user.update({
           where: { id: existingByEmail.id },
           data: { supabaseId },
-          select: { id: true, email: true, name: true, avatarUrl: true, supabaseId: true },
+          select: { id: true, email: true, name: true, avatarUrl: true, supabaseId: true, createdAt: true },
         });
         return updated as UserRow;
       }
@@ -297,6 +306,7 @@ async function getLatestPaidOrderByInternalUserId(
     SELECT
       plan,
       status,
+      "billingCycle" as "billingCycle",
       "paidAt" as "paidAt",
       "createdAt" as "createdAt",
       "tradeNo" as "tradeNo",
@@ -498,6 +508,7 @@ export async function getUsageSnapshotForSupabaseId(
   // 對齊 public.users（同 email 會 re-link），再用 internal userId 查 subscriptions
   const publicUser = await ensurePublicUserBySupabaseId(supabaseId);
   let internalUserId = publicUser?.id || null;
+  const freePlanAnchor = publicUser?.createdAt?.toISOString() ?? null;
 
   let subscription: SubscriptionRow | null = null;
   if (internalUserId) {
@@ -511,6 +522,7 @@ export async function getUsageSnapshotForSupabaseId(
   // 最後保險：若訂閱仍查不到或欄位異常，改用已付款訂單推導方案（避免帳單 Creator 但 usage 變回 0/3）
   let paidPlanFromOrders: PlanName | null = null;
   let paidAtAnchor: string | null = null;
+  let paidBillingCycle: string | null = null;
   let paidTradeNo: string | null = null;
   let paidMerchantTradeNo: string | null = null;
   if (internalUserId) {
@@ -520,6 +532,7 @@ export async function getUsageSnapshotForSupabaseId(
       p === "CREATOR" || p === "PRO" || p === "FLAGSHIP";
     if (isPaidPlan) {
       paidPlanFromOrders = p as PlanName;
+      paidBillingCycle = paidOrder?.billingCycle ? String(paidOrder.billingCycle) : null;
       paidAtAnchor = paidOrder?.paidAt ? new Date(paidOrder.paidAt).toISOString() : (
         paidOrder?.createdAt ? new Date(paidOrder.createdAt).toISOString() : null
       );
@@ -558,7 +571,7 @@ export async function getUsageSnapshotForSupabaseId(
       const anchor = new Date(paidAtAnchor);
       if (!Number.isNaN(anchor.getTime())) {
         const end = new Date(anchor);
-        end.setMonth(end.getMonth() + 1);
+        end.setMonth(end.getMonth() + getBillingCycleMonths(paidBillingCycle));
         cycleEndForSub = end.toISOString();
       }
     }
@@ -595,7 +608,7 @@ export async function getUsageSnapshotForSupabaseId(
   }
 
   const { cycleStart, cycleEnd } = getCurrentCycleWindow(
-    subscription?.startDate ?? paidAtAnchor ?? null
+    subscription?.startDate ?? paidAtAnchor ?? freePlanAnchor
   );
 
   const weekStart = new Date();
@@ -691,11 +704,12 @@ export async function checkUsageLimit(
       cycleEnd: string;
     }
 > {
+  const publicUser = await ensurePublicUserBySupabaseId(supabaseId);
   const { plan, subscription } = await getUserContext(supabaseId);
   const limit = LIMITS[plan][feature];
 
   const { cycleStart, cycleEnd } = getCurrentCycleWindow(
-    subscription?.startDate ?? null
+    subscription?.startDate ?? publicUser?.createdAt?.toISOString() ?? null
   );
 
   const data = await prisma.usageLog.findMany({

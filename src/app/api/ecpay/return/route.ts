@@ -1,18 +1,13 @@
 import { NextResponse } from "next/server";
 import crypto from "crypto";
-import { createClient } from "@supabase/supabase-js";
+import {
+  createSupabaseAdmin,
+  processPaidEcpayOrder,
+  type EcpayBillingCycle,
+  type EcpayPlanName,
+} from "@/lib/ecpay-payment";
 
 export const runtime = "nodejs";
-
-type PlanName = "CREATOR" | "PRO" | "FLAGSHIP";
-type BillingCycle = "monthly" | "quarterly" | "biannual" | "annual";
-
-function getSupabaseAdmin() {
-  return createClient(
-    process.env.NEXT_PUBLIC_SUPABASE_URL!,
-    process.env.SUPABASE_SERVICE_ROLE_KEY!
-  );
-}
 
 function generateCheckMacValue(params: Record<string, string>) {
   const hashKey = process.env.ECPAY_HASH_KEY!;
@@ -39,21 +34,8 @@ function generateCheckMacValue(params: Record<string, string>) {
   return crypto.createHash("sha256").update(encoded).digest("hex").toUpperCase();
 }
 
-function getCycleMonths(cycle: BillingCycle) {
-  if (cycle === "monthly") return 1;
-  if (cycle === "quarterly") return 3;
-  if (cycle === "biannual") return 6;
-  return 12;
-}
-
-function addMonths(base: Date, months: number) {
-  const d = new Date(base);
-  d.setMonth(d.getMonth() + months);
-  return d;
-}
-
 async function logOrderResultEvent(
-  supabaseAdmin: ReturnType<typeof getSupabaseAdmin>,
+  supabaseAdmin: ReturnType<typeof createSupabaseAdmin>,
   body: Record<string, string>,
   stage: string,
   ok: boolean,
@@ -89,7 +71,7 @@ async function tryProcessEcpayResult(body: Record<string, string>, stage: string
   const tradeNo = body.TradeNo || "";
   const rtnCode = body.RtnCode || "";
   const tradeAmt = Number(body.TradeAmt || 0);
-  const supabaseAdmin = getSupabaseAdmin();
+  const supabaseAdmin = createSupabaseAdmin();
 
   if (!merchantTradeNo || !tradeNo || !rtnCode) {
     await logOrderResultEvent(supabaseAdmin, body, stage, false, "missing required fields");
@@ -109,8 +91,8 @@ async function tryProcessEcpayResult(body: Record<string, string>, stage: string
   }
 
   const supabaseId = String(body.CustomField1 || "").trim();
-  const plan = String(body.CustomField2 || "").trim().toUpperCase() as PlanName;
-  const billingCycle = String(body.CustomField3 || "").trim() as BillingCycle;
+  const plan = String(body.CustomField2 || "").trim().toUpperCase() as EcpayPlanName;
+  const billingCycle = String(body.CustomField3 || "").trim() as EcpayBillingCycle;
 
   if (!supabaseId) {
     await logOrderResultEvent(supabaseAdmin, body, stage, false, "missing supabaseId", true);
@@ -125,110 +107,24 @@ async function tryProcessEcpayResult(body: Record<string, string>, stage: string
     return;
   }
 
-  const { data: publicUser, error: userErr } = await supabaseAdmin
-    .from("users")
-    .select("id")
-    .eq("supabaseId", supabaseId)
-    .maybeSingle();
-  if (!publicUser?.id) {
-    await logOrderResultEvent(
-      supabaseAdmin,
-      body,
-      stage,
-      false,
-      `user not found: ${userErr?.message || "unknown"}`,
-      true
-    );
-    return;
-  }
+  const result = await processPaidEcpayOrder({
+    supabaseAdmin,
+    supabaseId,
+    merchantTradeNo,
+    tradeNo,
+    plan,
+    billingCycle,
+    totalAmount: tradeAmt,
+  });
 
-  const { data: order, error: orderErr } = await supabaseAdmin
-    .from("orders")
-    .select("id, userId, plan, billingCycle, amount, status, createdAt")
-    .eq("merchantTradeNo", merchantTradeNo)
-    .maybeSingle();
-  if (!order?.id) {
-    await logOrderResultEvent(
-      supabaseAdmin,
-      body,
-      stage,
-      false,
-      `order not found: ${orderErr?.message || "unknown"}`,
-      true
-    );
-    return;
-  }
-  if (order.userId !== publicUser.id) {
-    await logOrderResultEvent(supabaseAdmin, body, stage, false, "order user mismatch", true);
-    return;
-  }
-  if (String(order.plan).toUpperCase() !== plan) {
-    await logOrderResultEvent(supabaseAdmin, body, stage, false, "order plan mismatch", true);
-    return;
-  }
-  if (String(order.billingCycle) !== billingCycle) {
-    await logOrderResultEvent(supabaseAdmin, body, stage, false, "order billing cycle mismatch", true);
-    return;
-  }
-  if (Number(order.amount) !== tradeAmt) {
-    await logOrderResultEvent(supabaseAdmin, body, stage, false, "order amount mismatch", true);
-    return;
-  }
-
-  // Idempotent: if already paid, nothing to do
-  if (String(order.status).toUpperCase() === "PAID") {
-    await logOrderResultEvent(supabaseAdmin, body, stage, true, "order already paid", true);
-    return;
-  }
-
-  const now = new Date();
-  const nowIso = now.toISOString();
-
-  // ensure subscription row exists
-  const { data: sub } = await supabaseAdmin
-    .from("subscriptions")
-    .select("id, endDate, status")
-    .eq("userId", publicUser.id)
-    .maybeSingle();
-
-  const months = getCycleMonths(billingCycle);
-  const startDate = nowIso;
-  const endDate = addMonths(now, months).toISOString();
-
-  if (sub?.id) {
-    await supabaseAdmin
-      .from("subscriptions")
-      .update({
-        plan,
-        status: "ACTIVE",
-        ecpayTradeNo: tradeNo,
-        ecpayMerchantTradeNo: merchantTradeNo,
-        startDate,
-        endDate,
-        updatedAt: nowIso,
-      })
-      .eq("id", sub.id);
-  } else {
-    await supabaseAdmin.from("subscriptions").insert({
-      id: crypto.randomUUID(),
-      userId: publicUser.id,
-      plan,
-      status: "ACTIVE",
-      ecpayTradeNo: tradeNo,
-      ecpayMerchantTradeNo: merchantTradeNo,
-      startDate,
-      endDate,
-      createdAt: nowIso,
-      updatedAt: nowIso,
-    });
-  }
-
-  await supabaseAdmin
-    .from("orders")
-    .update({ status: "PAID", tradeNo, paidAt: nowIso, updatedAt: nowIso })
-    .eq("id", order.id);
-
-  await logOrderResultEvent(supabaseAdmin, body, stage, true, "order result processed", true);
+  await logOrderResultEvent(
+    supabaseAdmin,
+    body,
+    result.stage || stage,
+    result.ok,
+    result.message,
+    true
+  );
 }
 
 export async function POST(req: Request) {

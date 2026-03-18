@@ -371,9 +371,6 @@ export async function POST(req: Request) {
       cachedGenerated.titles.length > 0 &&
       cachedGenerated.scripts.length > 0
     ) {
-      await logUsage(publicUserId, "GENERATE");
-      await recordEstimatedCost("GENERATE");
-
       return NextResponse.json({
         success: true,
         cached: true,
@@ -382,6 +379,11 @@ export async function POST(req: Request) {
         scripts: cachedGenerated.scripts,
         storyboard: cachedGenerated.storyboard,
         adaptedVersion: cachedGenerated.adaptedVersion,
+        usage: {
+          used: usage.used,
+          limit: usage.limit,
+          remaining: usage.remaining,
+        },
       });
     }
     const finalTopic = userTopic || substitution || topic || "";

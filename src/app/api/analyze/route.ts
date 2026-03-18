@@ -24,6 +24,7 @@ import { createClient } from "@supabase/supabase-js";
 export const runtime = "nodejs";
 
 const ANALYZE_UPLOADS_BUCKET = "analyze-uploads";
+const MAX_INLINE_UPLOAD_BYTES = 24 * 1024 * 1024;
 
 const WHISPER_SUPPORTED_EXT = ["flac", "m4a", "mp3", "mp4", "mpeg", "mpga", "oga", "ogg", "wav", "webm"];
 
@@ -163,17 +164,36 @@ function safeParseJson(raw: string) {
 }
 
 function isBlockedPlatform(url: string) {
-  const v = url.toLowerCase();
-  return (
-    v.includes("instagram.com") ||
-    v.includes("tiktok.com") ||
-    v.includes("vm.tiktok.com")
-  );
+  try {
+    const parsed = new URL(url);
+    const hostname = parsed.hostname.toLowerCase();
+    return (
+      hostname === "instagram.com" ||
+      hostname === "www.instagram.com" ||
+      hostname === "tiktok.com" ||
+      hostname === "www.tiktok.com" ||
+      hostname === "vm.tiktok.com"
+    );
+  } catch {
+    return false;
+  }
 }
 
 function isYouTubeShortsUrl(url: string) {
-  const v = url.toLowerCase();
-  return v.includes("youtube.com/shorts/");
+  try {
+    const parsed = new URL(url);
+    const hostname = parsed.hostname.toLowerCase();
+    const pathname = parsed.pathname.toLowerCase();
+    const allowedHosts = new Set(["youtube.com", "www.youtube.com", "m.youtube.com"]);
+    return allowedHosts.has(hostname) && pathname.startsWith("/shorts/");
+  } catch {
+    return false;
+  }
+}
+
+function getApproxBase64Bytes(input: string) {
+  const normalized = input.replace(/^data:[^;]+;base64,/, "").trim();
+  return Math.floor((normalized.length * 3) / 4);
 }
 
 export async function POST(req: Request) {
@@ -290,20 +310,17 @@ export async function POST(req: Request) {
           });
         }
 
-        await logUsage(publicUserId, "ANALYZE");
-        await recordEstimatedCost("ANALYZE");
-
         return NextResponse.json({
           success: true,
           cached: true,
           transcript: existing.transcript || "",
           analysis: normalizedExisting,
           usage: {
-            used: usage.used + 1,
+            used: usage.used,
             limit: usage.limit,
-            remaining: Math.max(usage.limit - (usage.used + 1), 0),
+            remaining: usage.remaining,
           },
-          message: "這支影片你已經分析過，已直接讀取資料庫內容",
+          message: "這支影片你已經分析過，已直接讀取資料庫內容，未重複扣次數",
         });
       }
     }
@@ -353,6 +370,14 @@ export async function POST(req: Request) {
           );
         }
 
+        if (blob.size > MAX_INLINE_UPLOAD_BYTES) {
+          await supabaseAdmin.storage.from(ANALYZE_UPLOADS_BUCKET).remove([storagePath]);
+          return NextResponse.json(
+            { error: "檔案過大，請壓縮到 24MB 以下再上傳" },
+            { status: 400 }
+          );
+        }
+
         const buffer = Buffer.from(await blob.arrayBuffer());
         const filename = storagePath.replace(/\\/g, "/").split("/").pop() || "";
         const ext = (filename && filename.includes(".")) ? filename.split(".").pop()!.toLowerCase() : "mp4";
@@ -396,10 +421,20 @@ export async function POST(req: Request) {
           );
         }
       } else if (body?.audioBase64 || body?.videoBase64) {
-        const base64 = body.audioBase64 || body.videoBase64;
+        const base64 = String(body.audioBase64 || body.videoBase64 || "");
         const mimeType = body.audioBase64 ? "audio/mpeg" : "video/mp4";
         const fileName = body.audioBase64 ? "audio.mp3" : "video.mp4";
-        const buffer = Buffer.from(base64, "base64");
+        const normalizedBase64 = base64.replace(/^data:[^;]+;base64,/, "").trim();
+        if (!normalizedBase64) {
+          return NextResponse.json({ error: "檔案內容為空" }, { status: 400 });
+        }
+        if (getApproxBase64Bytes(normalizedBase64) > MAX_INLINE_UPLOAD_BYTES) {
+          return NextResponse.json(
+            { error: "檔案過大，請壓縮到 24MB 以下再上傳" },
+            { status: 400 }
+          );
+        }
+        const buffer = Buffer.from(normalizedBase64, "base64");
 
         const uploadedFile = await toFile(buffer, fileName, { type: mimeType });
 

@@ -198,9 +198,6 @@ export async function POST(
     }
 
     if (existingAngles.length > 0) {
-      await logUsage(userId, "GENERATE_IDEAS");
-      await recordEstimatedCost("GENERATE_IDEAS");
-
       return NextResponse.json({
         success: true,
         cached: true,

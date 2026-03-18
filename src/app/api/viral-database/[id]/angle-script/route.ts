@@ -286,9 +286,6 @@ export async function POST(
     }
 
     if (selectedAngle?.generatedScript) {
-      await logUsage(userId, "GENERATE_SCRIPT");
-      await recordEstimatedCost("GENERATE_ANGLE_SCRIPT");
-
       return NextResponse.json({
         success: true,
         cached: true,

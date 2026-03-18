@@ -5,8 +5,31 @@ import path from "node:path";
 import os from "node:os";
 
 const execFileAsync = promisify(execFile);
+const YOUTUBE_SHORTS_HOSTS = new Set(["youtube.com", "www.youtube.com", "m.youtube.com"]);
+
+function assertSupportedVideoUrl(input: string) {
+  let parsed: URL;
+  try {
+    parsed = new URL(input);
+  } catch {
+    throw new Error("網址格式錯誤");
+  }
+
+  if (parsed.protocol !== "https:" && parsed.protocol !== "http:") {
+    throw new Error("僅支援 http/https 網址");
+  }
+
+  const hostname = parsed.hostname.toLowerCase();
+  const pathname = parsed.pathname.toLowerCase();
+  if (!YOUTUBE_SHORTS_HOSTS.has(hostname) || !pathname.startsWith("/shorts/")) {
+    throw new Error("目前僅支援 YouTube Shorts 網址");
+  }
+
+  return parsed.toString();
+}
 
 export async function downloadPublicVideo(url: string) {
+  const safeUrl = assertSupportedVideoUrl(url);
   const tempDir = await fs.mkdtemp(path.join(os.tmpdir(), "viralscript-"));
   const outputTemplate = path.join(tempDir, "video.%(ext)s");
 
@@ -16,14 +39,19 @@ export async function downloadPublicVideo(url: string) {
       [
         "--no-playlist",
         "--no-warnings",
+        "--socket-timeout",
+        "15",
+        "--max-filesize",
+        "50M",
         "-f",
         "mp4/best",
         "-o",
         outputTemplate,
-        url,
+        safeUrl,
       ],
       {
         windowsHide: true,
+        timeout: 60_000,
       }
     );
 

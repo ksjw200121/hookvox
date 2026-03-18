@@ -66,7 +66,7 @@ export async function POST(req: Request) {
       );
     }
 
-    const costGuard = await assertCostGuard("GENERATE");
+    const costGuard = await assertCostGuard("GENERATE_IDEAS");
     if (!costGuard.allowed) {
       return NextResponse.json(
         { error: "系統今日 AI 成本保護已啟動，請稍後再試" },
@@ -134,8 +134,8 @@ export async function POST(req: Request) {
       );
     }
 
-    await logUsage(publicUserId, "GENERATE");
-    await recordEstimatedCost("GENERATE");
+    await logUsage(publicUserId, "GENERATE_IDEAS");
+    await recordEstimatedCost("GENERATE_IDEAS");
 
     return NextResponse.json({
       success: true,

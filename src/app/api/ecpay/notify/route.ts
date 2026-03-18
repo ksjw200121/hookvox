@@ -1,25 +1,12 @@
 import crypto from "crypto";
-import { createClient } from "@supabase/supabase-js";
+import {
+  createSupabaseAdmin,
+  processPaidEcpayOrder,
+  type EcpayBillingCycle,
+  type EcpayPlanName,
+} from "@/lib/ecpay-payment";
 
 export const runtime = "nodejs";
-
-type PlanName = "CREATOR" | "PRO" | "FLAGSHIP";
-type CurrentPlanName = "FREE" | "CREATOR" | "PRO" | "FLAGSHIP";
-type BillingCycle = "monthly" | "quarterly" | "biannual" | "annual";
-
-const PLAN_LEVEL: Record<CurrentPlanName, number> = {
-  FREE: 0,
-  CREATOR: 1,
-  PRO: 2,
-  FLAGSHIP: 3,
-};
-
-function getSupabaseAdmin() {
-  return createClient(
-    process.env.NEXT_PUBLIC_SUPABASE_URL!,
-    process.env.SUPABASE_SERVICE_ROLE_KEY!
-  );
-}
 
 function generateCheckMacValue(params: Record<string, string>) {
   const hashKey = process.env.ECPAY_HASH_KEY!;
@@ -46,19 +33,6 @@ function generateCheckMacValue(params: Record<string, string>) {
   return crypto.createHash("sha256").update(encoded).digest("hex").toUpperCase();
 }
 
-function addMonths(base: Date, months: number) {
-  const d = new Date(base);
-  d.setMonth(d.getMonth() + months);
-  return d;
-}
-
-function getCycleMonths(cycle: BillingCycle) {
-  if (cycle === "monthly") return 1;
-  if (cycle === "quarterly") return 3;
-  if (cycle === "biannual") return 6;
-  return 12;
-}
-
 function resolveClientIp(req: Request) {
   const forwardedFor = req.headers.get("x-forwarded-for");
   if (forwardedFor) return forwardedFor.split(",")[0].trim();
@@ -70,7 +44,7 @@ function resolveClientIp(req: Request) {
 }
 
 async function logWebhookEvent(
-  supabaseAdmin: ReturnType<typeof getSupabaseAdmin>,
+  supabaseAdmin: ReturnType<typeof createSupabaseAdmin>,
   req: Request,
   body: Record<string, string>,
   meta: {
@@ -115,7 +89,7 @@ async function logWebhookEvent(
 }
 
 export async function POST(req: Request) {
-  const supabaseAdmin = getSupabaseAdmin();
+  const supabaseAdmin = createSupabaseAdmin();
   try {
     const formData = await req.formData();
     const body = Object.fromEntries(formData.entries()) as Record<string, string>;
@@ -144,8 +118,8 @@ export async function POST(req: Request) {
     }
 
     const supabaseId = body.CustomField1;
-    const plan = String(body.CustomField2 || "").toUpperCase() as PlanName;
-    const billingCycle = String(body.CustomField3 || "") as BillingCycle;
+    const plan = String(body.CustomField2 || "").toUpperCase() as EcpayPlanName;
+    const billingCycle = String(body.CustomField3 || "") as EcpayBillingCycle;
     const merchantTradeNo = body.MerchantTradeNo;
     const tradeNo = body.TradeNo;
     const totalAmount = Number(body.TradeAmt || body.amount || 0);
@@ -180,222 +154,30 @@ export async function POST(req: Request) {
       return new Response("0|週期錯誤", { status: 400 });
     }
 
-    const { data: publicUser, error: userError } = await supabaseAdmin
-      .from("users")
-      .select("id")
-      .eq("supabaseId", supabaseId)
-      .maybeSingle();
-
-    if (userError || !publicUser?.id) {
-      await logWebhookEvent(supabaseAdmin, req, body, {
-        ok: false,
-        stage: "LOAD_USER",
-        message: "找不到使用者",
-        checkMacValid: true,
-      });
-      return new Response("0|找不到使用者", { status: 400 });
-    }
-
-    const { data: order, error: orderError } = await supabaseAdmin
-      .from("orders")
-      .select("id, userId, plan, billingCycle, amount, merchantTradeNo, tradeNo, status, createdAt, paidAt")
-      .eq("merchantTradeNo", merchantTradeNo)
-      .maybeSingle();
-
-    if (orderError || !order?.id) {
-      await logWebhookEvent(supabaseAdmin, req, body, {
-        ok: false,
-        stage: "LOAD_ORDER",
-        message: "找不到訂單",
-        checkMacValid: true,
-      });
-      return new Response("0|找不到訂單", { status: 400 });
-    }
-
-    if (order.userId !== publicUser.id) {
-      await logWebhookEvent(supabaseAdmin, req, body, {
-        ok: false,
-        stage: "ORDER_MISMATCH_USER",
-        message: "訂單使用者不符",
-        checkMacValid: true,
-      });
-      return new Response("0|訂單使用者不符", { status: 400 });
-    }
-
-    if (order.plan !== plan || order.billingCycle !== billingCycle) {
-      await logWebhookEvent(supabaseAdmin, req, body, {
-        ok: false,
-        stage: "ORDER_MISMATCH_DATA",
-        message: "訂單資料不符",
-        checkMacValid: true,
-      });
-      return new Response("0|訂單資料不符", { status: 400 });
-    }
-
-    if (Number(order.amount) !== totalAmount) {
-      await logWebhookEvent(supabaseAdmin, req, body, {
-        ok: false,
-        stage: "ORDER_MISMATCH_AMOUNT",
-        message: "付款金額不符",
-        checkMacValid: true,
-      });
-      return new Response("0|付款金額不符", { status: 400 });
-    }
-
-    if (order.status === "PAID") {
-      await logWebhookEvent(supabaseAdmin, req, body, {
-        ok: true,
-        stage: "ALREADY_PAID",
-        message: "order already paid",
-        checkMacValid: true,
-      });
-      return new Response("1|OK");
-    }
-
-    const { data: subscription, error: subError } = await supabaseAdmin
-      .from("subscriptions")
-      .select("id, userId, plan, status, ecpayTradeNo, ecpayMerchantTradeNo, startDate, endDate")
-      .eq("userId", publicUser.id)
-      .maybeSingle();
-
-    if (subError) {
-      await logWebhookEvent(supabaseAdmin, req, body, {
-        ok: false,
-        stage: "LOAD_SUBSCRIPTION",
-        message: subError.message,
-        checkMacValid: true,
-      });
-      return new Response("0|讀取訂閱資料失敗", { status: 500 });
-    }
-
-    // 新註冊用戶可能還沒有 subscriptions 列（以前只有在 usage 時才會建立）。
-    // 付款成功時要能自動補上，否則會出現「交易完成但帳單仍未生效」。
-    const hasSubscription = Boolean(subscription?.id);
-    const currentPlan = String(subscription?.plan || "FREE").toUpperCase() as CurrentPlanName;
-
-    if (PLAN_LEVEL[plan] < PLAN_LEVEL[currentPlan]) {
-      await logWebhookEvent(supabaseAdmin, req, body, {
-        ok: true,
-        stage: "DOWNGRADE_IGNORED",
-        message: "ignore downgrade payment",
-        checkMacValid: true,
-      });
-      return new Response("1|OK");
-    }
-
-    if (PLAN_LEVEL[plan] === PLAN_LEVEL[currentPlan]) {
-      await logWebhookEvent(supabaseAdmin, req, body, {
-        ok: true,
-        stage: "SAME_PLAN_IGNORED",
-        message: "ignore same plan payment",
-        checkMacValid: true,
-      });
-      return new Response("1|OK");
-    }
-
-    const now = new Date();
-    const updateTime = new Date().toISOString();
-    const currentEndDate = subscription?.endDate ? new Date(subscription.endDate) : null;
-
-    // 升級（本期內加購更高方案）：不重算週期，次數延續。到期後重購 = 新週期，次數重置，收方案全額。
-    const isUpgrade =
-      subscription?.status === "ACTIVE" &&
-      Boolean(currentEndDate) &&
-      !Number.isNaN(currentEndDate!.getTime()) &&
-      currentEndDate! > now;
-
-    const updatePayload: Record<string, unknown> = {
+    const result = await processPaidEcpayOrder({
+      supabaseAdmin,
+      supabaseId,
+      merchantTradeNo,
+      tradeNo,
       plan,
-      status: "ACTIVE",
-      ecpayTradeNo: tradeNo,
-      ecpayMerchantTradeNo: merchantTradeNo,
-      updatedAt: updateTime,
-    };
+      billingCycle,
+      totalAmount,
+    });
 
-    if (isUpgrade) {
-      // 升級：不重算週期，只改方案與額度上限，本期已用次數延續；startDate / endDate 不變
-    } else {
-      // 新訂閱或到期後重購：重算週期（下個月時間到會重置），收的是方案全額
-      const months = getCycleMonths(billingCycle);
-      updatePayload.startDate = now.toISOString();
-      updatePayload.endDate = addMonths(now, months).toISOString();
-    }
-
-    if (hasSubscription) {
-      const { error: updateSubscriptionError } = await supabaseAdmin
-        .from("subscriptions")
-        .update(updatePayload)
-        .eq("id", subscription!.id);
-
-      if (updateSubscriptionError) {
-        await logWebhookEvent(supabaseAdmin, req, body, {
-          ok: false,
-          stage: "UPDATE_SUBSCRIPTION",
-          message: updateSubscriptionError.message,
-          checkMacValid: true,
-        });
-        return new Response(
-          `0|更新訂閱失敗:${updateSubscriptionError.message}`,
-          { status: 500 }
-        );
-      }
-    } else {
-      const { error: insertSubscriptionError } = await supabaseAdmin
-        .from("subscriptions")
-        .insert({
-          id: crypto.randomUUID(),
-          userId: publicUser.id,
-          plan,
-          status: "ACTIVE",
-          ecpayTradeNo: tradeNo,
-          ecpayMerchantTradeNo: merchantTradeNo,
-          startDate: (updatePayload.startDate as string) || updateTime,
-          endDate: (updatePayload.endDate as string) || null,
-          createdAt: updateTime,
-          updatedAt: updateTime,
-        });
-
-      if (insertSubscriptionError) {
-        await logWebhookEvent(supabaseAdmin, req, body, {
-          ok: false,
-          stage: "INSERT_SUBSCRIPTION",
-          message: insertSubscriptionError.message,
-          checkMacValid: true,
-        });
-        return new Response(
-          `0|建立訂閱失敗:${insertSubscriptionError.message}`,
-          { status: 500 }
-        );
-      }
-    }
-
-    const { error: updateOrderError } = await supabaseAdmin
-      .from("orders")
-      .update({
-        status: "PAID",
-        tradeNo,
-        paidAt: updateTime,
-        updatedAt: updateTime,
-      })
-      .eq("id", order.id);
-
-    if (updateOrderError) {
+    if (!result.ok) {
       await logWebhookEvent(supabaseAdmin, req, body, {
         ok: false,
-        stage: "UPDATE_ORDER",
-        message: updateOrderError.message,
+        stage: result.stage,
+        message: result.message,
         checkMacValid: true,
       });
-      return new Response(
-        `0|更新訂單失敗:${updateOrderError.message}`,
-        { status: 500 }
-      );
+      return new Response(`0|${result.message}`, { status: 400 });
     }
 
     await logWebhookEvent(supabaseAdmin, req, body, {
       ok: true,
-      stage: "SUCCESS",
-      message: "paid and upgraded",
+      stage: result.stage,
+      message: result.message,
       checkMacValid: true,
     });
     return new Response("1|OK");
