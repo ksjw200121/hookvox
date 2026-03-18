@@ -85,6 +85,7 @@ async function getAuthHeader(): Promise<Record<string, string>> {
 
 export default function PlansPage() {
   const [currentPlan, setCurrentPlan] = useState('FREE')
+  const [currentBillingCycle, setCurrentBillingCycle] = useState<BillingCycle | null>(null)
   const [billing, setBilling] = useState<BillingCycle>('monthly')
   const [loading, setLoading] = useState(false)
   const [selectedPlan, setSelectedPlan] = useState('')
@@ -107,6 +108,10 @@ export default function PlansPage() {
         const billingRes = await fetch('/api/billing', { headers: authHeader })
         const billingJson = billingRes.ok ? await billingRes.json() : null
         const billingPlan = String(billingJson?.subscription?.plan || 'FREE').trim().toUpperCase()
+        const billingCycleRaw = String(billingJson?.subscription?.billingCycle || '').trim()
+        const billingCycleValue = ['monthly', 'quarterly', 'biannual', 'annual'].includes(billingCycleRaw)
+          ? (billingCycleRaw as BillingCycle)
+          : null
 
         const res = await fetch('/api/usage', {
           method: 'GET',
@@ -114,6 +119,10 @@ export default function PlansPage() {
         })
 
         if (!res.ok) {
+          setCurrentBillingCycle(billingCycleValue)
+          if (billingPlan !== 'FREE' && billingCycleValue) {
+            setBilling(billingCycleValue)
+          }
           if (billingPlan !== 'FREE') setCurrentPlan(billingPlan)
           return
         }
@@ -125,6 +134,10 @@ export default function PlansPage() {
 
         if (effectivePlan) {
           setCurrentPlan(effectivePlan)
+        }
+        setCurrentBillingCycle(billingCycleValue)
+        if (effectivePlan !== 'FREE' && billingCycleValue) {
+          setBilling(billingCycleValue)
         }
       } catch {
         // 避免 plans 頁因 usage 讀取失敗整頁中斷
@@ -159,11 +172,21 @@ export default function PlansPage() {
     return couponApplied ? plan.earlybirdMonthly : plan.normalMonthly
   }
 
+  const isCrossCycleUpgradeBlocked =
+    currentPlan !== 'FREE' &&
+    !!currentBillingCycle &&
+    billing !== currentBillingCycle
+
   const handleUpgradeClick = (planKey: string) => {
     if (planKey === 'FREE') return
 
     if (PLAN_LEVEL[planKey] <= PLAN_LEVEL[currentPlan]) {
       alert('無法購買低於或等於目前方案的訂閱')
+      return
+    }
+
+    if (isCrossCycleUpgradeBlocked) {
+      alert(`你目前是${BILLING_OPTIONS.find(o => o.key === currentBillingCycle)?.label || ''}方案，升級時只能選擇相同週期`)
       return
     }
 
@@ -240,6 +263,24 @@ export default function PlansPage() {
         <h1 className="text-4xl font-black mb-3">選擇方案</h1>
         <p className="text-white/40">月繳、季繳、半年、年繳，怎麼划算怎麼選</p>
       </div>
+
+      <div className="rounded-2xl border border-brand-500/20 bg-brand-500/10 p-4 text-sm text-white/70 leading-relaxed">
+        <p className="font-medium text-white mb-1">訂閱規則說明</p>
+        <p>免費升級到付費方案會開啟新週期並重置額度。</p>
+        <p>付費方案升級到更高方案時，會用目標方案原價扣掉你目前方案已付款金額，例如 Pro 年繳 15350 減 Creator 月繳 699。</p>
+        <p>付費升級目前只能選擇與現有方案相同的訂閱週期，不能跨週期升級。</p>
+        <p>目前尚未開放自動定期定額；到期後若要繼續使用，需手動重新訂閱。</p>
+      </div>
+
+      {currentPlan !== 'FREE' && currentBillingCycle && (
+        <div className="rounded-2xl border border-amber-500/20 bg-amber-500/10 p-4 text-sm text-white/70 leading-relaxed">
+          你目前使用的是
+          <span className="font-bold text-white mx-1">
+            {BILLING_OPTIONS.find(o => o.key === currentBillingCycle)?.label}
+          </span>
+          方案。升級時只能選擇相同週期。
+        </div>
+      )}
 
       <div className="glass rounded-2xl p-6">
         <div className="flex flex-col sm:flex-row items-start sm:items-center gap-3">
@@ -318,9 +359,17 @@ export default function PlansPage() {
           {BILLING_OPTIONS.map(opt => (
             <button
               key={opt.key}
-              onClick={() => setBilling(opt.key)}
+              onClick={() => {
+                if (currentPlan !== 'FREE' && currentBillingCycle && opt.key !== currentBillingCycle) return
+                setBilling(opt.key)
+              }}
+              disabled={currentPlan !== 'FREE' && currentBillingCycle !== null && opt.key !== currentBillingCycle}
               className={`px-4 py-2 rounded-lg text-sm font-medium transition-all ${
-                billing === opt.key ? 'bg-brand-500 text-white' : 'text-white/50 hover:text-white'
+                billing === opt.key
+                  ? 'bg-brand-500 text-white'
+                  : currentPlan !== 'FREE' && currentBillingCycle !== null && opt.key !== currentBillingCycle
+                  ? 'text-white/20 cursor-not-allowed'
+                  : 'text-white/50 hover:text-white'
               }`}
             >
               {opt.label}
@@ -470,8 +519,9 @@ export default function PlansPage() {
         <div className="space-y-5">
           {[
             { q: '可以隨時取消嗎？', a: '可以，訂閱可在任何時候取消，取消後仍可使用至當期結束。' },
-            { q: '額度什麼時候重置？', a: '依你的訂閱週期，例如月繳則每月同一日重置；未使用完的次數不累計至下期。' },
-            { q: 'Creator 不夠用可以升級嗎？', a: '可以，升級時只計算剩餘天數的差額，不需要重新購買整個方案。' },
+            { q: '額度什麼時候重置？', a: '依你的訂閱週期重置；免費升付費會開新週期，已到期後重新訂閱也會重新計算。未使用完的次數不累計至下期。' },
+            { q: 'Creator 不夠用可以升級嗎？', a: '可以，升級到更高方案時會用目標方案原價扣掉你目前方案已付款金額，不看剩餘天數。例如 Creator 月繳 699 升 Pro 年繳 15350，會收 14651。' },
+            { q: '現在有自動定期定額嗎？', a: '目前沒有自動扣款。到期後若要繼續使用，請手動至方案頁重新訂閱；之後若開放自動續訂會再另外更新。' },
             { q: '次數是怎麼計算的？', a: '分析與生成都會計入對應配額，系統依照你的訂閱週期計算。' },
             { q: '支援哪些付款方式？', a: '透過綠界科技金流，可選信用卡、ATM/網銀轉帳（虛擬帳號）、超商代碼等，依綠界頁面顯示為準。' },
             { q: '有退款政策嗎？', a: '本服務為數位內容，付款後即可立即使用。依消費者保護法第19條，數位內容一經提供即喪失鑑賞期退款權利，付款前請詳閱並確認同意。' },

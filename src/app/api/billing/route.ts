@@ -101,6 +101,7 @@ export async function GET(req: Request) {
     let status = "FREE";
     let startDate: string | null = null;
     let endDate: string | null = null;
+    let billingCycle: string | null = null;
 
     // 1) Prefer subscriptions table if it indicates a paid plan and is not expired
     if (subscription) {
@@ -134,6 +135,7 @@ export async function GET(req: Request) {
     if (shouldUsePaidOrder) {
       plan = latestPaidPlan;
       status = "ACTIVE";
+      billingCycle = String(latestPaid?.billingCycle || "monthly");
       const anchorIso = latestPaid?.paidAt || latestPaid?.createdAt || null;
       const cycle = String(latestPaid?.billingCycle || "monthly");
       const months = getCycleMonths(cycle);
@@ -170,6 +172,7 @@ export async function GET(req: Request) {
       subscription: {
         plan,
         planLabel: PLAN_LABELS[plan] || plan,
+        billingCycle,
         status,
         startDate,
         endDate,

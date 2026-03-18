@@ -211,8 +211,19 @@ export default function BillingPage() {
     });
   }
 
+function getDaysUntil(iso: string | null) {
+  if (!iso) return null;
+  const target = new Date(iso);
+  if (Number.isNaN(target.getTime())) return null;
+  return Math.ceil((target.getTime() - Date.now()) / (1000 * 60 * 60 * 24));
+}
+
   const isPaid = subscription?.status === "ACTIVE";
   const isExpired = subscription?.status === "EXPIRED";
+const reminderDate = subscription?.endDate ?? usage?.cycleEnd ?? null;
+const daysUntilExpiry = getDaysUntil(reminderDate);
+const isExpiringSoon =
+  isPaid && daysUntilExpiry !== null && daysUntilExpiry >= 0 && daysUntilExpiry <= 7;
 
   async function handleContinuePayment(order: OrderRow) {
     if (order.status !== "PENDING" || !order.merchantTradeNo) return;
@@ -321,13 +332,52 @@ export default function BillingPage() {
       <div>
         <h1 className="text-3xl font-black mb-2">帳單</h1>
         <p className="text-white/40">
-          目前方案、計費週期與付款記錄。到期後額度會重置；若續訂同方案則收方案全額。
+          目前方案、計費週期與付款記錄。到期後會回到免費方案；若重新訂閱則開啟新週期。
         </p>
       </div>
 
       {error && (
         <div className="rounded-xl bg-red-500/10 border border-red-500/20 text-red-300 px-4 py-3 text-sm">
           {error}
+        </div>
+      )}
+
+      {!loading && isExpiringSoon && (
+        <div className="rounded-2xl bg-amber-500/10 border border-amber-500/20 px-5 py-4">
+          <div className="flex items-start justify-between gap-4 flex-wrap">
+            <div>
+              <p className="font-bold text-amber-300 mb-1">訂閱即將到期</p>
+              <p className="text-sm text-white/70">
+                你的方案將於 {formatDate(reminderDate)} 到期，約剩 {daysUntilExpiry} 天。
+                到期後會回到免費方案，如要繼續使用請手動重新訂閱。
+              </p>
+            </div>
+            <Link
+              href="/plans"
+              className="bg-brand-500 hover:bg-brand-400 text-white px-4 py-2 rounded-xl font-bold text-sm transition-colors"
+            >
+              前往續訂
+            </Link>
+          </div>
+        </div>
+      )}
+
+      {!loading && isExpired && (
+        <div className="rounded-2xl bg-red-500/10 border border-red-500/20 px-5 py-4">
+          <div className="flex items-start justify-between gap-4 flex-wrap">
+            <div>
+              <p className="font-bold text-red-300 mb-1">訂閱已到期</p>
+              <p className="text-sm text-white/70">
+                你目前已回到免費方案。若要恢復付費額度，請到方案頁重新訂閱。
+              </p>
+            </div>
+            <Link
+              href="/plans"
+              className="bg-brand-500 hover:bg-brand-400 text-white px-4 py-2 rounded-xl font-bold text-sm transition-colors"
+            >
+              重新訂閱
+            </Link>
+          </div>
         </div>
       )}
 
@@ -410,13 +460,15 @@ export default function BillingPage() {
         )}
       </div>
 
-      {/* 說明：到期重置與續訂全額 */}
+      {/* 說明：到期、升級與續訂規則 */}
       <div className="rounded-2xl border border-white/10 bg-white/5 p-4 text-sm text-white/60 leading-relaxed">
         <p className="font-medium text-white/70 mb-1">計費說明</p>
         <ul className="list-disc list-inside space-y-1">
           <li>本期到期後，使用額度會重置；若繼續使用需至方案頁重新訂閱。</li>
-          <li>續訂時依所選方案收取<strong className="text-white/80">方案全額</strong>（非差額）。</li>
-          <li>本期內升級更高方案則只收差額，週期與已用次數不變。</li>
+          <li>目前尚未開放自動定期定額或自動扣款。</li>
+          <li>本期內升級更高方案時，會用目標方案原價扣掉你目前方案已付款金額，週期與已用次數延續。</li>
+          <li>付費方案升級目前只能選擇與現有方案相同的訂閱週期。</li>
+          <li>已到期後重新訂閱，會依新方案收取全額並重新開啟週期。</li>
         </ul>
       </div>
 

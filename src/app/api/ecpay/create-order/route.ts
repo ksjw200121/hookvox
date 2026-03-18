@@ -138,7 +138,7 @@ export async function POST(req: Request) {
 
     const { data: subscription, error: subscriptionError } = await supabaseAdmin
       .from("subscriptions")
-      .select("id, plan, status, endDate, ecpayTradeNo")
+      .select("id, plan, status, startDate, endDate, ecpayTradeNo")
       .eq("userId", publicUser.id)
       .maybeSingle();
 
@@ -171,10 +171,9 @@ export async function POST(req: Request) {
 
     let currentPlan: CurrentPlanName = "FREE";
 
-    // Prefer paid orders as the source of truth. Avoid "ghost paid" subscription states.
     const { data: paidOrder } = await supabaseAdmin
       .from("orders")
-      .select("plan, status, paidAt, createdAt")
+      .select("plan, status, paidAt, createdAt, billingCycle, amount")
       .eq("userId", publicUser.id)
       .in("status", ["PAID", "SUCCESS"])
       .order("paidAt", { ascending: false, nullsFirst: false })
@@ -182,13 +181,7 @@ export async function POST(req: Request) {
       .limit(1)
       .maybeSingle();
 
-    const paidPlan = String((paidOrder as any)?.plan || "").trim().toUpperCase() as CurrentPlanName;
-    const hasPaidOrder =
-      paidPlan === "CREATOR" || paidPlan === "PRO" || paidPlan === "FLAGSHIP";
-
-    if (hasPaidOrder) {
-      currentPlan = paidPlan;
-    } else if (subscription?.status === "ACTIVE") {
+    if (subscription?.status === "ACTIVE") {
       const rawPlan = String(subscription.plan || "FREE").toUpperCase() as CurrentPlanName;
       const isPaid =
         rawPlan === "CREATOR" || rawPlan === "PRO" || rawPlan === "FLAGSHIP";
@@ -215,6 +208,8 @@ export async function POST(req: Request) {
       }
     }
 
+    const currentBillingCycle = String((paidOrder as any)?.billingCycle || "").trim() as BillingCycle | "";
+
     if (plan === currentPlan) {
       return NextResponse.json(
         { error: "你目前已經是此方案，不能重複購買" },
@@ -225,6 +220,17 @@ export async function POST(req: Request) {
     if (PLAN_LEVEL[plan] < PLAN_LEVEL[currentPlan]) {
       return NextResponse.json(
         { error: "無法購買低於目前方案的訂閱" },
+        { status: 400 }
+      );
+    }
+
+    if (
+      currentPlan !== "FREE" &&
+      currentBillingCycle &&
+      billingCycle !== currentBillingCycle
+    ) {
+      return NextResponse.json(
+        { error: "升級時只能選擇與目前方案相同的訂閱週期" },
         { status: 400 }
       );
     }
@@ -266,11 +272,15 @@ export async function POST(req: Request) {
 
     const merchantTradeNo = makeMerchantTradeNo(supabaseId);
 
-    // 升級：只收差額。續訂（到期後再買）：currentPlan 已為 FREE，收方案全額。
+    // 升級：以目標方案全額扣掉目前方案已付款金額。
+    // 例如 Creator 月繳 699 -> Pro 年繳 15350，則收 15350 - 699。
+    // 到期後再買：currentPlan 會回 FREE，收方案全額。
     const isUpgrade =
       currentPlan !== "FREE" && PLAN_LEVEL[plan] > PLAN_LEVEL[currentPlan];
     const fullAmount = calcAmount(plan, billingCycle);
-    const currentAmount = isUpgrade ? calcAmount(currentPlan as PlanName, billingCycle) : 0;
+    const currentAmount = isUpgrade
+      ? Number((paidOrder as any)?.amount || 0)
+      : 0;
     const amount = isUpgrade
       ? Math.max(1, Math.round(fullAmount - currentAmount))
       : fullAmount;
