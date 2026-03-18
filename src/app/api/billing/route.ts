@@ -13,6 +13,20 @@ function getSupabaseAdmin() {
   );
 }
 
+function getSupabaseKeyRole() {
+  try {
+    const token = process.env.SUPABASE_SERVICE_ROLE_KEY || "";
+    const payload = token.split(".")[1];
+    if (!payload) return "unknown";
+    const normalized = payload.replace(/-/g, "+").replace(/_/g, "/");
+    const padded = normalized.padEnd(normalized.length + ((4 - (normalized.length % 4)) % 4), "=");
+    const decoded = JSON.parse(Buffer.from(padded, "base64").toString("utf8"));
+    return String(decoded?.role || decoded?.app_metadata?.role || "unknown");
+  } catch {
+    return "unknown";
+  }
+}
+
 const PLAN_LABELS: Record<string, string> = {
   FREE: "免費方案",
   CREATOR: "Creator 方案",
@@ -97,7 +111,14 @@ export async function GET(req: Request) {
       );
     }
     if (!orders || orders.length === 0) {
-      console.error("[billing] orders empty for userId:", publicUser.id, "supabaseUrl:", process.env.NEXT_PUBLIC_SUPABASE_URL?.slice(0, 50));
+      console.error(
+        "[billing] orders empty for userId:",
+        publicUser.id,
+        "supabaseUrl:",
+        process.env.NEXT_PUBLIC_SUPABASE_URL?.slice(0, 50),
+        "serviceRoleKeyRole:",
+        getSupabaseKeyRole()
+      );
     }
 
     let plan = "FREE";
