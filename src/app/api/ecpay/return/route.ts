@@ -59,23 +59,33 @@ async function tryProcessEcpayResult(body: Record<string, string>, stage: string
   const rtnCode = body.RtnCode || "";
   const tradeAmt = Number(body.TradeAmt || 0);
 
-  if (!merchantTradeNo || !tradeNo || !rtnCode) return;
+  if (!merchantTradeNo || !tradeNo || !rtnCode) {
+    console.error(`[${stage}] missing fields: merchantTradeNo=${merchantTradeNo} tradeNo=${tradeNo} rtnCode=${rtnCode}`);
+    return;
+  }
 
   const received = body.CheckMacValue || "";
   const expected = generateCheckMacValue(body);
-  if (!received || received !== expected) return;
+  if (!received || received !== expected) {
+    console.error(`[${stage}] CheckMacValue mismatch: received=${received?.slice(0,10)} expected=${expected?.slice(0,10)}`);
+    return;
+  }
 
-  if (rtnCode !== "1") return;
+  if (rtnCode !== "1") {
+    console.error(`[${stage}] rtnCode not 1: ${rtnCode}`);
+    return;
+  }
 
   const supabaseId = String(body.CustomField1 || "").trim();
   const plan = String(body.CustomField2 || "").trim().toUpperCase() as PlanName;
   const billingCycle = String(body.CustomField3 || "").trim() as BillingCycle;
 
-  if (!supabaseId) return;
-  if (!["CREATOR", "PRO", "FLAGSHIP"].includes(plan)) return;
-  if (!["monthly", "quarterly", "biannual", "annual"].includes(billingCycle)) return;
+  if (!supabaseId) { console.error(`[${stage}] missing supabaseId`); return; }
+  if (!["CREATOR", "PRO", "FLAGSHIP"].includes(plan)) { console.error(`[${stage}] invalid plan: ${plan}`); return; }
+  if (!["monthly", "quarterly", "biannual", "annual"].includes(billingCycle)) { console.error(`[${stage}] invalid billingCycle: ${billingCycle}`); return; }
 
   const supabaseAdmin = getSupabaseAdmin();
+  console.log(`[${stage}] processing: merchantTradeNo=${merchantTradeNo} supabaseId=${supabaseId} plan=${plan} cycle=${billingCycle} tradeAmt=${tradeAmt}`);
 
   // best-effort audit log (do not block)
   try {
@@ -99,26 +109,48 @@ async function tryProcessEcpayResult(body: Record<string, string>, stage: string
     // ignore
   }
 
-  const { data: publicUser } = await supabaseAdmin
+  const { data: publicUser, error: userErr } = await supabaseAdmin
     .from("users")
     .select("id")
     .eq("supabaseId", supabaseId)
     .maybeSingle();
-  if (!publicUser?.id) return;
+  if (!publicUser?.id) {
+    console.error(`[${stage}] user not found for supabaseId=${supabaseId} err=${userErr?.message}`);
+    return;
+  }
 
-  const { data: order } = await supabaseAdmin
+  const { data: order, error: orderErr } = await supabaseAdmin
     .from("orders")
     .select("id, userId, plan, billingCycle, amount, status, createdAt")
     .eq("merchantTradeNo", merchantTradeNo)
     .maybeSingle();
-  if (!order?.id) return;
-  if (order.userId !== publicUser.id) return;
-  if (String(order.plan).toUpperCase() !== plan) return;
-  if (String(order.billingCycle) !== billingCycle) return;
-  if (Number(order.amount) !== tradeAmt) return;
+  if (!order?.id) {
+    console.error(`[${stage}] order not found for merchantTradeNo=${merchantTradeNo} err=${orderErr?.message}`);
+    return;
+  }
+  if (order.userId !== publicUser.id) {
+    console.error(`[${stage}] userId mismatch: order.userId=${order.userId} publicUser.id=${publicUser.id}`);
+    return;
+  }
+  if (String(order.plan).toUpperCase() !== plan) {
+    console.error(`[${stage}] plan mismatch: order.plan=${order.plan} body.plan=${plan}`);
+    return;
+  }
+  if (String(order.billingCycle) !== billingCycle) {
+    console.error(`[${stage}] cycle mismatch: order.billingCycle=${order.billingCycle} body.cycle=${billingCycle}`);
+    return;
+  }
+  if (Number(order.amount) !== tradeAmt) {
+    console.error(`[${stage}] amount mismatch: order.amount=${order.amount} tradeAmt=${tradeAmt}`);
+    return;
+  }
 
   // Idempotent: if already paid, nothing to do
-  if (String(order.status).toUpperCase() === "PAID") return;
+  if (String(order.status).toUpperCase() === "PAID") {
+    console.log(`[${stage}] order already paid: ${order.id}`);
+    return;
+  }
+  console.log(`[${stage}] updating order ${order.id} to PAID for user ${publicUser.id}`);
 
   const now = new Date();
   const nowIso = now.toISOString();
