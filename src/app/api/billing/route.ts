@@ -75,6 +75,7 @@ export async function GET(req: Request) {
       .maybeSingle();
 
     if (subError) {
+      console.error("[billing] subscription query error:", subError.code, subError.message);
       return NextResponse.json(
         { error: "讀取訂閱失敗" },
         { status: 500 }
@@ -89,10 +90,14 @@ export async function GET(req: Request) {
       .limit(50);
 
     if (ordersError) {
+      console.error("[billing] orders query error:", ordersError.code, ordersError.message, ordersError.hint);
       return NextResponse.json(
-        { error: "讀取訂單失敗" },
+        { error: "讀取訂單失敗", _detail: ordersError.message },
         { status: 500 }
       );
+    }
+    if (!orders || orders.length === 0) {
+      console.error("[billing] orders empty for userId:", publicUser.id, "supabaseUrl:", process.env.NEXT_PUBLIC_SUPABASE_URL?.slice(0, 50));
     }
 
     let plan = "FREE";
