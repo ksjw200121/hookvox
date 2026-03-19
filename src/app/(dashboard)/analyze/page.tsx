@@ -323,7 +323,9 @@ export default function AnalyzePage() {
     const hasMime = !!file.type;
     const hasExt = !!fileExt;
 
-    const invalidByMime = hasMime && !allowedTypes.includes(file.type);
+    // 若手機沒有提供明確副檔名（常見），不要用 file.type 的特定字串去拒絕，
+    // 否則例如 file.type=video/hevc 會被誤判成不支援。
+    const invalidByMime = hasExt ? hasMime && !allowedTypes.includes(file.type) : false;
     const invalidByExt = hasExt && !allowedExts.includes(fileExt || "");
 
     // 若手機無法提供 mime/type 或副檔名，我們先允許通過，後續再用 upload 內容推論。
