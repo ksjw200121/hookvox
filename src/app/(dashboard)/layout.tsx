@@ -4,6 +4,7 @@ import Link from "next/link";
 import { useEffect, useState } from "react";
 import { usePathname } from "next/navigation";
 import AdminOnlyNavLink from "@/components/admin/AdminOnlyNavLink";
+import InstagramOnboardingModal from "@/components/profile/InstagramOnboardingModal";
 import { supabase } from "@/lib/supabase";
 
 export default function DashboardLayout({
@@ -50,6 +51,7 @@ export default function DashboardLayout({
     { href: "/viral-db", label: "爆款資料庫" },
     { href: "/plans", label: "方案" },
     { href: "/billing", label: "帳單" },
+    { href: "/settings", label: "設定" },
   ];
 
   const safePathname = pathname || "/dashboard";
@@ -116,6 +118,7 @@ export default function DashboardLayout({
       <main className="mx-auto max-w-7xl w-full px-6 py-8 flex-1">
         {children}
       </main>
+      {!checkingSession && !isGuest ? <InstagramOnboardingModal /> : null}
 
       <footer className="border-t border-white/10 py-6 mt-auto">
         <div className="mx-auto max-w-7xl px-6 flex flex-col md:flex-row items-center justify-between gap-3 text-xs text-white/30">
