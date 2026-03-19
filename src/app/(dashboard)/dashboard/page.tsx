@@ -64,7 +64,6 @@ export default function DashboardPage() {
 
         // 先跑 billing（self-heal 訂閱），再跑 usage（確保方案一致）
         const PLAN_LEVEL_MAP: Record<string, number> = { FREE: 0, CREATOR: 1, PRO: 2, FLAGSHIP: 3 }
-        const PLAN_LIMITS_MAP: Record<string, number> = { FREE: 3, CREATOR: 50, PRO: 200, FLAGSHIP: 500 }
 
         const billingRes = await fetch('/api/billing', {
           headers: { Authorization: `Bearer ${token}` },
@@ -95,9 +94,10 @@ export default function DashboardPage() {
         // 取較高方案
         const effectivePlan = (PLAN_LEVEL_MAP[billingPlan] ?? 0) >= (PLAN_LEVEL_MAP[usagePlan] ?? 0)
           ? billingPlan : usagePlan
-        const correctLimit = PLAN_LIMITS_MAP[effectivePlan] ?? 3
         const analyzeUsed = json.usage?.analyze?.used || 0
         const generateUsed = json.usage?.generate?.used || 0
+        const analyzeLimit = json.usage?.analyze?.limit ?? 3
+        const generateLimit = json.usage?.generate?.limit ?? 3
 
         setData({
           plan: effectivePlan,
@@ -106,13 +106,13 @@ export default function DashboardPage() {
           usage: {
             analyze: {
               used: analyzeUsed,
-              limit: correctLimit,
-              remaining: Math.max(0, correctLimit - analyzeUsed),
+              limit: analyzeLimit,
+              remaining: json.usage?.analyze?.remaining ?? Math.max(0, analyzeLimit - analyzeUsed),
             },
             generate: {
               used: generateUsed,
-              limit: correctLimit,
-              remaining: Math.max(0, correctLimit - generateUsed),
+              limit: generateLimit,
+              remaining: json.usage?.generate?.remaining ?? Math.max(0, generateLimit - generateUsed),
             },
             cycleEnd: json.usage?.analyze?.cycleEnd ?? null,
             week: json.usage?.week

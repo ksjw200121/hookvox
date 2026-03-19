@@ -120,23 +120,24 @@ export default function BillingPage() {
       );
       setOrders(billingData.orders || []);
 
-      // usage 的額度以 effectivePlan 對應的 limits 為基準（避免 race condition 顯示錯誤次數）
-      const PLAN_LIMITS: Record<string, number> = {
-        FREE: 3, CREATOR: 50, PRO: 200, FLAGSHIP: 500,
-      };
-      const correctLimit = PLAN_LIMITS[effectivePlan] ?? 3;
       const analyzeUsed = usageData?.usage?.analyze?.used ?? 0;
       const generateUsed = usageData?.usage?.generate?.used ?? 0;
+      const analyzeLimit = usageData?.usage?.analyze?.limit ?? 3;
+      const generateLimit = usageData?.usage?.generate?.limit ?? 3;
       const usageState = {
         analyze: {
           used: analyzeUsed,
-          limit: correctLimit,
-          remaining: Math.max(0, correctLimit - analyzeUsed),
+          limit: analyzeLimit,
+          remaining:
+            usageData?.usage?.analyze?.remaining ??
+            Math.max(0, analyzeLimit - analyzeUsed),
         },
         generate: {
           used: generateUsed,
-          limit: correctLimit,
-          remaining: Math.max(0, correctLimit - generateUsed),
+          limit: generateLimit,
+          remaining:
+            usageData?.usage?.generate?.remaining ??
+            Math.max(0, generateLimit - generateUsed),
         },
         cycleEnd: usageData?.usage?.analyze?.cycleEnd ?? null,
       };
