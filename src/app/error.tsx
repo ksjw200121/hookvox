@@ -1,5 +1,7 @@
 "use client";
 
+import { useEffect } from "react";
+
 export default function Error({
   error,
   reset,
@@ -7,6 +9,11 @@ export default function Error({
   error: Error & { digest?: string };
   reset: () => void;
 }) {
+  useEffect(() => {
+    // Log the actual error for debugging — never show raw details to user
+    console.error("Page error:", error);
+  }, [error]);
+
   return (
     <div
       style={{
@@ -22,7 +29,7 @@ export default function Error({
       </h1>
 
       <p style={{ marginBottom: 24, color: "#ccc" }}>
-        {error?.message || "頁面發生未知錯誤"}
+        頁面載入時發生問題，請重新整理或稍後再試。
       </p>
 
       <button

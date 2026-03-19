@@ -1,4 +1,5 @@
 import { NextResponse } from "next/server";
+import { sanitizeApiError } from "@/lib/api-error";
 import { prisma } from "@/lib/prisma";
 import {
   getUserIdFromRequest,
@@ -90,12 +91,11 @@ export async function GET(req: Request) {
       },
     });
   } catch (error: unknown) {
-    const err = error as Error;
-    console.error("viral-database route error:", err);
-
+    console.error("viral-database route error:", error);
+    const sanitized = sanitizeApiError(error, "讀取爆款資料庫失敗，請稍後再試");
     return NextResponse.json(
-      { error: err?.message || "讀取爆款資料庫失敗" },
-      { status: 500 }
+      { error: sanitized.message },
+      { status: sanitized.status }
     );
   }
 }

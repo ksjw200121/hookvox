@@ -1,4 +1,5 @@
 import { NextResponse } from "next/server";
+import { sanitizeApiError } from "@/lib/api-error";
 import { prisma } from "@/lib/prisma";
 import { getUserIdFromRequest, ensurePublicUserBySupabaseId } from "@/lib/usage-checker";
 
@@ -45,10 +46,11 @@ export async function POST(req: Request) {
       user: updated,
     });
   } catch (error: unknown) {
-    const err = error as Error;
+    console.error("profile/instagram error:", error);
+    const sanitized = sanitizeApiError(error, "更新 IG 帳號失敗，請稍後再試");
     return NextResponse.json(
-      { error: err?.message || "更新 IG 帳號失敗" },
-      { status: 500 }
+      { error: sanitized.message },
+      { status: sanitized.status }
     );
   }
 }

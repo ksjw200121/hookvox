@@ -1,4 +1,5 @@
 import { isAiEnabled } from "@/lib/ai-switch";
+import { sanitizeApiError } from "@/lib/api-error";
 import { NextResponse } from "next/server";
 import Anthropic from "@anthropic-ai/sdk";
 import { prisma } from "@/lib/prisma";
@@ -531,12 +532,11 @@ ${
       },
     });
   } catch (error: unknown) {
-    const err = error as Error;
-    console.error("generate error:", err);
-
+    console.error("generate error:", error);
+    const sanitized = sanitizeApiError(error, "生成失敗，請稍後再試");
     return NextResponse.json(
-      { error: err?.message || "伺服器錯誤" },
-      { status: 500 }
+      { error: sanitized.message },
+      { status: sanitized.status }
     );
   }
 }

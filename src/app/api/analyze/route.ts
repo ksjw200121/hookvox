@@ -1,4 +1,5 @@
 import { isAiEnabled } from "@/lib/ai-switch";
+import { sanitizeApiError } from "@/lib/api-error";
 import { NextResponse } from "next/server";
 import OpenAI from "openai";
 import Anthropic from "@anthropic-ai/sdk";
@@ -564,11 +565,11 @@ export async function POST(req: Request) {
       },
     });
   } catch (error: unknown) {
-    const err = error as Error;
-    console.error("analyze error:", err);
+    console.error("analyze error:", error);
+    const sanitized = sanitizeApiError(error, "分析失敗，請稍後再試");
     return NextResponse.json(
-      { error: err?.message || "伺服器錯誤" },
-      { status: 500 }
+      { error: sanitized.message },
+      { status: sanitized.status }
     );
   }
 }

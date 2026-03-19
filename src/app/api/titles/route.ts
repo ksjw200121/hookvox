@@ -1,4 +1,5 @@
 import { isAiEnabled } from "@/lib/ai-switch";
+import { sanitizeApiError } from "@/lib/api-error";
 import { NextResponse } from "next/server";
 import Anthropic from "@anthropic-ai/sdk";
 import {
@@ -160,11 +161,11 @@ export async function POST(req: Request) {
       },
     });
   } catch (error: unknown) {
-    const err = error as Error;
-    console.error("titles error:", err);
+    console.error("titles error:", error);
+    const sanitized = sanitizeApiError(error, "標題生成失敗，請稍後再試");
     return NextResponse.json(
-      { error: err?.message || "標題生成失敗" },
-      { status: 500 }
+      { error: sanitized.message },
+      { status: sanitized.status }
     );
   }
 }

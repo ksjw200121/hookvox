@@ -6,6 +6,7 @@ import { supabase } from "@/lib/supabase";
 import { FIELD_GUIDE, INDUSTRIES_WITH_STORYBOARD, Industry } from "@/prompts";
 import GuestAccessModal from "@/components/auth/GuestAccessModal";
 import { emitUsageUpdated } from "@/lib/usage-events";
+import { getAuthHeader as getAuthHeaderBase, authFetch } from "@/lib/auth-fetch";
 
 type ScriptScene = {
   id?: number;
@@ -141,22 +142,8 @@ async function readJsonSafe(res: Response) {
   }
 }
 
-async function getAuthHeader(): Promise<Record<string, string>> {
-  const {
-    data: { session },
-  } = await supabase.auth.getSession();
-  if (session?.access_token) {
-    return { Authorization: `Bearer ${session.access_token}` };
-  }
-
-  // Mobile WebView occasionally returns empty session on first read.
-  // Try one refresh cycle before treating user as unauthenticated.
-  const { data: refreshed } = await supabase.auth.refreshSession();
-  if (refreshed?.session?.access_token) {
-    return { Authorization: `Bearer ${refreshed.session.access_token}` };
-  }
-  return {};
-}
+// Use centralized getAuthHeader from auth-fetch.ts (handles mobile WebView retries)
+const getAuthHeader = getAuthHeaderBase;
 
 async function refreshUsageAndBroadcast() {
   const authHeader = await getAuthHeader();
@@ -378,8 +365,7 @@ export default function AnalyzePage() {
       setLoadingAnalyze(true);
       resetResults();
 
-      const authHeader = await getAuthHeader();
-      let effectiveAuthHeader: Record<string, string> = { ...authHeader };
+      let effectiveAuthHeader = await getAuthHeader();
 
       let body: Record<string, any> = {};
 
@@ -400,19 +386,20 @@ export default function AnalyzePage() {
         }
         body = { transcript: pasteTranscript };
       } else if (inputMode === "upload" && uploadFile) {
-        const { data: { session } } = await supabase.auth.getSession();
-        if (!session?.user?.id) {
+        // Ensure we have a valid session — retry once for mobile WebView race condition
+        if (!effectiveAuthHeader.Authorization) {
+          await new Promise((r) => setTimeout(r, 150));
+          effectiveAuthHeader = await getAuthHeader();
+        }
+        if (!effectiveAuthHeader.Authorization) {
           setError("請先登入再上傳檔案");
           setLoadingAnalyze(false);
+          if (typeof window !== "undefined") {
+            window.location.href = `/login?redirect=${encodeURIComponent("/analyze")}`;
+          }
           return;
         }
-        // 某些手機 WebView 會出現第一次拿不到 token、第二次才拿到。
-        // 這裡補上 token，避免後續 API 誤判「未登入」。
-        if (!effectiveAuthHeader.Authorization && session?.access_token) {
-          effectiveAuthHeader = {
-            Authorization: `Bearer ${session.access_token}`,
-          };
-        }
+
         const rawName = uploadFile.name.replace(/[^a-zA-Z0-9._-]/g, "_");
         const lastDot = rawName.lastIndexOf(".");
         const ext = lastDot >= 0 ? rawName.slice(lastDot) : "";
@@ -421,7 +408,6 @@ export default function AnalyzePage() {
           .replace(/^\./, "")
           .toLowerCase();
         const videoExts = ["mp4", "webm"];
-        const audioExts = ["mp3", "mpeg", "m4a", "wav", "ogg", "flac"];
         const mimeLower = (uploadFile.type || "").toLowerCase();
         const isVideoByMime = mimeLower.startsWith("video/");
         const isVideoByExt = videoExts.includes(normalizedExt);
@@ -453,9 +439,10 @@ export default function AnalyzePage() {
           const base64 = btoa(binary);
           body = isVideo ? { videoBase64: base64 } : { audioBase64: base64 };
         } else {
-          const signRes = await fetch("/api/analyze/upload-url", {
+          // Use authFetch for signed URL request (auto-retries on 401)
+          const signRes = await authFetch("/api/analyze/upload-url", {
             method: "POST",
-            headers: { "Content-Type": "application/json", ...effectiveAuthHeader },
+            headers: { "Content-Type": "application/json" },
             body: JSON.stringify({
               fileName: uploadFile.name || "video",
               contentType,
@@ -477,17 +464,25 @@ export default function AnalyzePage() {
             return;
           }
 
-          const uploadRes = await fetch(signedUrl, {
+          // Upload to Supabase Storage with one retry on failure
+          let uploadRes = await fetch(signedUrl, {
             method: "PUT",
-            headers: {
-              "Content-Type": contentType,
-            },
+            headers: { "Content-Type": contentType },
             body: uploadFile,
           });
 
           if (!uploadRes.ok) {
-            const uploadText = await uploadRes.text().catch(() => "");
-            setError(uploadText || "大檔上傳失敗，請稍後再試");
+            // Retry once — transient network issues on mobile are common
+            await new Promise((r) => setTimeout(r, 500));
+            uploadRes = await fetch(signedUrl, {
+              method: "PUT",
+              headers: { "Content-Type": contentType },
+              body: uploadFile,
+            });
+          }
+
+          if (!uploadRes.ok) {
+            setError("大檔上傳失敗，請確認網路穩定後再試");
             setLoadingAnalyze(false);
             return;
           }
@@ -499,6 +494,9 @@ export default function AnalyzePage() {
         return;
       }
 
+      // Refresh auth header right before the main analyze call
+      // to minimize window for token expiry
+      effectiveAuthHeader = await getAuthHeader();
       if (!effectiveAuthHeader.Authorization) {
         setError("登入狀態已失效，請重新登入後再試");
         setLoadingAnalyze(false);
@@ -508,9 +506,10 @@ export default function AnalyzePage() {
         return;
       }
 
-      const res = await fetch("/api/analyze", {
+      // Use authFetch for the main analyze call (auto-retries on 401)
+      const res = await authFetch("/api/analyze", {
         method: "POST",
-        headers: { "Content-Type": "application/json", ...effectiveAuthHeader },
+        headers: { "Content-Type": "application/json" },
         body: JSON.stringify(body),
       });
 
@@ -831,8 +830,11 @@ export default function AnalyzePage() {
                       <div>
                         <div style={{ fontSize: 32, marginBottom: 8 }}>🎵</div>
                         <div style={{ color: "#888", fontSize: 14 }}>點擊選擇檔案</div>
-                        <div style={{ color: "#444", fontSize: 12, marginTop: 6 }}>
-                          mp3 / mp4 / m4a / wav / webm，建議 {MAX_UPLOAD_MB}MB 以下（.mov 請轉 mp4）
+                        <div style={{ color: "#ef4444", fontSize: 13, marginTop: 6, fontWeight: 600 }}>
+                          單檔上限 {MAX_UPLOAD_MB}MB（超過請先壓縮）
+                        </div>
+                        <div style={{ color: "#444", fontSize: 12, marginTop: 4 }}>
+                          mp3 / mp4 / m4a / wav / webm（.mov 請先轉 mp4）
                         </div>
                       </div>
                     )}

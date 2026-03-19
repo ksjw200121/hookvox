@@ -1,4 +1,5 @@
 import { isAiEnabled } from "@/lib/ai-switch";
+import { sanitizeApiError } from "@/lib/api-error";
 import { NextResponse } from "next/server";
 import OpenAI from "openai";
 import { toFile } from "openai/uploads";
@@ -141,12 +142,11 @@ export async function POST(req: Request) {
       },
     });
   } catch (error: unknown) {
-    const err = error as Error;
-    console.error("transcribe error:", err);
-
+    console.error("transcribe error:", error);
+    const sanitized = sanitizeApiError(error, "轉錄失敗，請稍後再試");
     return NextResponse.json(
-      { error: err?.message || "轉錄失敗，請重試" },
-      { status: 500 }
+      { error: sanitized.message },
+      { status: sanitized.status }
     );
   }
 }

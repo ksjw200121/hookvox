@@ -1,4 +1,5 @@
 import { NextResponse } from "next/server";
+import { sanitizeApiError } from "@/lib/api-error";
 import { getUserIdFromRequest, ensurePublicUserBySupabaseId } from "@/lib/usage-checker";
 
 export const runtime = "nodejs";
@@ -25,10 +26,11 @@ export async function GET(req: Request) {
       },
     });
   } catch (error: unknown) {
-    const err = error as Error;
+    console.error("profile/me error:", error);
+    const sanitized = sanitizeApiError(error, "讀取個人資料失敗，請稍後再試");
     return NextResponse.json(
-      { error: err?.message || "讀取個人資料失敗" },
-      { status: 500 }
+      { error: sanitized.message },
+      { status: sanitized.status }
     );
   }
 }

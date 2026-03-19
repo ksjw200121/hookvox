@@ -32,7 +32,7 @@ export async function GET(req: Request) {
         generate: { used: 0, limit: 3, remaining: 3, cycleStart: null, cycleEnd: null },
         week: { analyze: 0, generate: 0 },
       },
-      _error: err?.message || "伺服器錯誤",
+      _error: "伺服器暫時忙碌，請稍後再試",
       version: "usage-snapshot-v4",
       commit: process.env.VERCEL_GIT_COMMIT_SHA || null,
     });
