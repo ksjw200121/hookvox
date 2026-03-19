@@ -118,7 +118,9 @@ const PURPOSE_COLORS: Record<string, string> = {
   CTA: "#4ade80",
 };
 
-const ACCEPTED_FILE_TYPES = ".mp3,.mp4,.m4a,.wav,.webm,.ogg,.flac,.mpeg,.mpga";
+// 手機在檔案選取時，常見情況是沒有完整副檔名或只給容器類型，
+// 所以這裡至少要包含 HEVC 常見容器 `m4v`（有些 iOS 會是 m4v）。
+const ACCEPTED_FILE_TYPES = ".mp3,.mp4,.m4a,.m4v,.wav,.webm,.ogg,.flac,.mpeg,.mpga";
 // 小檔直接送 API（請求 body 上限約 4.5 MB，base64 約 1.33 倍 → 約 3 MB）
 const MAX_INLINE_MB = 3;
 const MAX_INLINE_BYTES = MAX_INLINE_MB * 1024 * 1024;
@@ -295,6 +297,7 @@ export default function AnalyzePage() {
       "audio/x-wav",
       "video/mp4",
       "video/webm",
+      "video/quicktime",
       "audio/ogg",
       "audio/flac",
     ];
@@ -309,6 +312,7 @@ export default function AnalyzePage() {
       "mp3",
       "mpeg",
       "m4a",
+      "m4v",
       "wav",
       "mp4",
       "webm",
@@ -316,10 +320,14 @@ export default function AnalyzePage() {
       "flac",
     ];
 
-    const typeOk = file.type ? allowedTypes.includes(file.type) : true;
-    const extOk = fileExt ? allowedExts.includes(fileExt) : false;
+    const hasMime = !!file.type;
+    const hasExt = !!fileExt;
 
-    if (!typeOk || (file.type === "" || !file.type) ? !extOk : false) {
+    const invalidByMime = hasMime && !allowedTypes.includes(file.type);
+    const invalidByExt = hasExt && !allowedExts.includes(fileExt || "");
+
+    // 若手機無法提供 mime/type 或副檔名，我們先允許通過，後續再用 upload 內容推論。
+    if (invalidByMime || invalidByExt) {
       setUploadError("不支援的檔案格式，請上傳 mp3 / mp4 / m4a / wav / webm（勿用 .mov，請先轉成 mp4）");
       setUploadFile(null);
       setUploadSuccess(false);
@@ -392,9 +400,11 @@ export default function AnalyzePage() {
           .toLowerCase();
         const videoExts = ["mp4", "webm"];
         const audioExts = ["mp3", "mpeg", "m4a", "wav", "ogg", "flac"];
-        const isVideo =
-          (uploadFile.type || "").toLowerCase().startsWith("video/") ||
-          videoExts.includes(normalizedExt);
+        const mimeLower = (uploadFile.type || "").toLowerCase();
+        const isVideoByMime = mimeLower.startsWith("video/");
+        const isVideoByExt = videoExts.includes(normalizedExt);
+        // 若 mime 與副檔名都未知（例如手機選檔只給檔名），預設當影片。
+        const isVideo = isVideoByMime || isVideoByExt || (!mimeLower && !normalizedExt);
         const inferContentType = () => {
           const t = (uploadFile.type || "").toLowerCase();
           if (t) return t;
