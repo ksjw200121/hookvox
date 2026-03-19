@@ -388,7 +388,7 @@ export async function POST(req: Request) {
         if (blob.size > MAX_INLINE_UPLOAD_BYTES) {
           await supabaseAdmin.storage.from(ANALYZE_UPLOADS_BUCKET).remove([storagePath]);
           return NextResponse.json(
-            { error: "檔案過大，請壓縮到 24MB 以下再上傳" },
+            { error: "檔案過大。目前轉錄服務單檔上限約 25MB，請先壓縮到 24MB 以下再上傳。" },
             { status: 400 }
           );
         }
@@ -445,7 +445,7 @@ export async function POST(req: Request) {
         }
         if (getApproxBase64Bytes(normalizedBase64) > MAX_INLINE_UPLOAD_BYTES) {
           return NextResponse.json(
-            { error: "檔案過大，請壓縮到 24MB 以下再上傳" },
+            { error: "檔案過大。目前轉錄服務單檔上限約 25MB，請先壓縮到 24MB 以下再上傳。" },
             { status: 400 }
           );
         }

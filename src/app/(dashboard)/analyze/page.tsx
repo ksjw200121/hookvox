@@ -124,8 +124,8 @@ const ACCEPTED_FILE_TYPES = "audio/*,video/*,.mp3,.mp4,.m4a,.m4v,.wav,.webm,.ogg
 // 小檔直接送 API（請求 body 上限約 4.5 MB，base64 約 1.33 倍 → 約 3 MB）
 const MAX_INLINE_MB = 3;
 const MAX_INLINE_BYTES = MAX_INLINE_MB * 1024 * 1024;
-// 大檔先上傳 Supabase Storage 再分析，分析完自動刪檔
-const MAX_UPLOAD_MB = 50;
+// Whisper 單檔上限約 25MB，這裡保守抓 24MB，避免使用者上傳後才在後端失敗。
+const MAX_UPLOAD_MB = 24;
 const MAX_UPLOAD_BYTES = MAX_UPLOAD_MB * 1024 * 1024;
 
 function copyText(text: string) {
@@ -342,7 +342,7 @@ export default function AnalyzePage() {
       return;
     }
     if (file.size > MAX_UPLOAD_BYTES) {
-      setUploadError(`檔案超過 ${MAX_UPLOAD_MB}MB。請縮短影片或改用「貼上逐字稿」/ YouTube Shorts 網址。`);
+      setUploadError(`檔案超過 ${MAX_UPLOAD_MB}MB。請先壓縮影片後再上傳，或改用「貼上逐字稿」/ YouTube Shorts 網址。`);
       setUploadFile(null);
       setUploadSuccess(false);
       return;
@@ -731,7 +731,7 @@ export default function AnalyzePage() {
               <div>
                 <FieldBlock
                   label="上傳音訊或影片"
-                  hint="支援 mp3 / mp4 / m4a / wav / webm 等；.mov 請先轉成 mp4。單檔上限 50MB，分析完成後自動刪除。上傳後按「開始爆款分析」。"
+                  hint={`支援 mp3 / mp4 / m4a / wav / webm 等；.mov 請先轉成 mp4。單檔建議壓到 ${MAX_UPLOAD_MB}MB 以下，分析完成後自動刪除。上傳後按「開始爆款分析」。`}
                 >
                   <input
                     ref={fileInputRef}
@@ -778,12 +778,40 @@ export default function AnalyzePage() {
                         <div style={{ fontSize: 32, marginBottom: 8 }}>🎵</div>
                         <div style={{ color: "#888", fontSize: 14 }}>點擊選擇檔案</div>
                         <div style={{ color: "#444", fontSize: 12, marginTop: 6 }}>
-                          mp3 / mp4 / m4a / wav / webm，最大 50MB（.mov 請轉 mp4）
+                          mp3 / mp4 / m4a / wav / webm，建議 {MAX_UPLOAD_MB}MB 以下（.mov 請轉 mp4）
                         </div>
                       </div>
                     )}
                   </div>
                 </FieldBlock>
+
+                <div
+                  style={{
+                    padding: "14px 16px",
+                    borderRadius: 12,
+                    background: "#0b1220",
+                    border: "1px solid #1d4ed8",
+                    color: "#bfdbfe",
+                    fontSize: 13,
+                    lineHeight: 1.7,
+                    marginTop: 12,
+                    marginBottom: 12,
+                  }}
+                >
+                  <div style={{ fontWeight: 700, marginBottom: 6 }}>上傳前先看這裡</div>
+                  <div>
+                    目前轉錄服務單檔上限約 25MB，為了避免上傳後才失敗，建議先壓到 {MAX_UPLOAD_MB}MB 以下。
+                    若你是手機原始影片（常見 HEVC / 1080p / 60fps），請先用剪映 / CapCut 輸出成 720p、30fps、mp4。
+                  </div>
+                  <div style={{ marginTop: 8 }}>
+                    IG 影片若不是你自己的原檔，請只使用你已合法取得授權的版本；如果創作者關閉下載，請直接向對方索取原檔，不要繞過限制。
+                  </div>
+                  <div style={{ marginTop: 10 }}>
+                    <Link href="/guide#upload-files" style={{ color: "#93c5fd", textDecoration: "underline" }}>
+                      查看合法取得影片與壓縮教學
+                    </Link>
+                  </div>
+                </div>
 
                 {uploadError && (
                   <div
