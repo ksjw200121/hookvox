@@ -3,6 +3,7 @@
 import Link from "next/link";
 import { useEffect, useState } from "react";
 import { usePathname } from "next/navigation";
+import AdminOnlyNavLink from "@/components/admin/AdminOnlyNavLink";
 import { supabase } from "@/lib/supabase";
 
 export default function DashboardLayout({
@@ -81,6 +82,7 @@ export default function DashboardLayout({
                 </Link>
               );
             })}
+            <AdminOnlyNavLink />
           </nav>
 
           <div className="flex items-center gap-3">
@@ -131,12 +133,12 @@ export default function DashboardLayout({
             <Link href="/refund" className="hover:text-white/60 transition-colors">
               退款政策
             </Link>
-            <Link
-              href="/contact"
+            <a
+              href="mailto:hookvox.support@gmail.com?subject=Hookvox%20客服協助"
               className="hover:text-white/60 transition-colors"
             >
               聯繫客服
-            </Link>
+            </a>
           </div>
         </div>
       </footer>
