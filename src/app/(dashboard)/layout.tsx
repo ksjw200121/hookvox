@@ -136,12 +136,9 @@ export default function DashboardLayout({
             <Link href="/refund" className="hover:text-white/60 transition-colors">
               退款政策
             </Link>
-            <a
-              href="mailto:ksjw200121@gmail.com?subject=Hookvox%20聯繫我們"
-              className="hover:text-white/60 transition-colors"
-            >
+            <Link href="/contact" className="hover:text-white/60 transition-colors">
               聯繫我們
-            </a>
+            </Link>
           </div>
         </div>
       </footer>

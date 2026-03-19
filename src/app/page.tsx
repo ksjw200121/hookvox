@@ -398,7 +398,7 @@ export default function HomePage() {
             <Link href="/privacy" className="hover:text-white transition-colors">隱私權政策</Link>
             <Link href="/refund" className="hover:text-white transition-colors">退款政策</Link>
             <a href="mailto:ksjw200121@gmail.com?subject=訂閱電子報" className="hover:text-white transition-colors">訂閱電子報</a>
-            <a href="mailto:ksjw200121@gmail.com" className="hover:text-white transition-colors">聯繫我們</a>
+            <Link href="/contact" className="hover:text-white transition-colors">聯繫我們</Link>
           </div>
         </div>
       </footer>
