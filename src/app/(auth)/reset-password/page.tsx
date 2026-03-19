@@ -38,18 +38,23 @@ export default function ResetPasswordPage() {
       return;
     }
 
-    const { error } = await supabase.auth.updateUser({
-      password,
-    });
+    try {
+      const { error } = await supabase.auth.updateUser({
+        password,
+      });
 
-    if (error) {
-      setMessage(translateSupabaseAuthError(error.message));
+      if (error) {
+        setMessage(translateSupabaseAuthError(error.message));
+        setLoading(false);
+        return;
+      }
+
+      setSuccess(true);
       setLoading(false);
-      return;
+    } catch (err: unknown) {
+      setMessage(translateSupabaseAuthError((err as Error)?.message || "Failed to fetch"));
+      setLoading(false);
     }
-
-    setSuccess(true);
-    setLoading(false);
   };
 
   if (!ready) return null;

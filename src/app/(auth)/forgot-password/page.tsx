@@ -24,19 +24,24 @@ export default function ForgotPasswordPage() {
       return;
     }
 
-    const { error } = await supabase.auth.resetPasswordForEmail(email, {
-      redirectTo: `${window.location.origin}/reset-password`,
-      captchaToken,
-    });
+    try {
+      const { error } = await supabase.auth.resetPasswordForEmail(email, {
+        redirectTo: `${window.location.origin}/reset-password`,
+        captchaToken,
+      });
 
-    if (error) {
-      setMessage(translateSupabaseAuthError(error.message));
+      if (error) {
+        setMessage(translateSupabaseAuthError(error.message));
+        setLoading(false);
+        return;
+      }
+
+      setSuccess(true);
       setLoading(false);
-      return;
+    } catch (err: unknown) {
+      setMessage(translateSupabaseAuthError((err as Error)?.message || "Failed to fetch"));
+      setLoading(false);
     }
-
-    setSuccess(true);
-    setLoading(false);
   };
 
   return (

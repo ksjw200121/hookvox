@@ -143,16 +143,32 @@ export async function parsePublicUrl(url: string): Promise<ParsedUrlResult> {
     throw new Error("不支援的網址");
   }
 
-  const res = await fetch(safeUrl.toString(), {
-    headers: {
-      "user-agent":
-        "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/127.0.0.0 Safari/537.36",
-      "accept-language": "zh-TW,zh;q=0.9,en;q=0.8",
-      accept: "text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8",
-      referer: "https://www.google.com/",
-    },
-    cache: "no-store",
-  });
+  // 設定 15 秒超時，避免伺服器端 fetch 卡死
+  const controller = new AbortController();
+  const timeout = setTimeout(() => controller.abort(), 15_000);
+
+  let res: Response;
+  try {
+    res = await fetch(safeUrl.toString(), {
+      headers: {
+        "user-agent":
+          "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/127.0.0.0 Safari/537.36",
+        "accept-language": "zh-TW,zh;q=0.9,en;q=0.8",
+        accept: "text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8",
+        referer: "https://www.google.com/",
+      },
+      cache: "no-store",
+      signal: controller.signal,
+    });
+  } catch (fetchErr: unknown) {
+    clearTimeout(timeout);
+    const msg = (fetchErr as Error)?.name === "AbortError"
+      ? "網址解析超時，請確認網址可正常訪問"
+      : "無法連線到目標網站，請確認網址正確並稍後再試";
+    throw new Error(msg);
+  } finally {
+    clearTimeout(timeout);
+  }
 
   if (!res.ok) {
     throw new Error(`無法取得網頁，HTTP ${res.status}`);

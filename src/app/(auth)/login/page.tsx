@@ -33,31 +33,38 @@ function LoginForm() {
     setMessage("");
     setSuccessMessage("");
 
-    const signInPayload: any = { email, password };
-    if (captchaToken) {
-      signInPayload.options = { captchaToken };
-    }
+    try {
+      const signInPayload: any = { email, password };
+      if (captchaToken) {
+        signInPayload.options = { captchaToken };
+      }
 
-    const { error } = await supabase.auth.signInWithPassword(signInPayload);
+      const { error } = await supabase.auth.signInWithPassword(signInPayload);
 
-    // 若 Supabase 回傳 captcha 相關錯誤，給使用者清楚的指引
-    if (error && error.message?.toLowerCase().includes("captcha")) {
-      setMessage("真人驗證尚未完成，請等待驗證框顯示「成功」後再試一次。若持續失敗，請重新整理頁面。");
+      // 若 Supabase 回傳 captcha 相關錯誤，給使用者清楚的指引
+      if (error && error.message?.toLowerCase().includes("captcha")) {
+        setMessage("真人驗證尚未完成，請等待驗證框顯示「成功」後再試一次。若持續失敗，請重新整理頁面。");
+        setLoading(false);
+        return;
+      }
+
+      if (error) {
+        setMessage(translateSupabaseAuthError(error.message));
+        setLoading(false);
+        return;
+      }
+
+      setSuccessMessage("登入成功，正在返回頁面...");
+
+      setTimeout(() => {
+        window.location.href = redirectTo;
+      }, 800);
+    } catch (err: unknown) {
+      // 捕獲 "Failed to fetch" 等網路層錯誤（Supabase SDK 可能直接 throw）
+      const errMsg = (err as Error)?.message || "";
+      setMessage(translateSupabaseAuthError(errMsg || "Failed to fetch"));
       setLoading(false);
-      return;
     }
-
-    if (error) {
-      setMessage(translateSupabaseAuthError(error.message));
-      setLoading(false);
-      return;
-    }
-
-    setSuccessMessage("登入成功，正在返回頁面...");
-
-    setTimeout(() => {
-      window.location.href = redirectTo;
-    }, 800);
   };
 
   return (
@@ -96,9 +103,9 @@ function LoginForm() {
           <AuthTurnstile
             onVerify={(token) => {
               setCaptchaToken(token);
-              // 驗證成功時，清除之前可能殘留的錯誤訊息
+              // 驗證成功時，清除驗證相關的殘留錯誤訊息
               setMessage((prev) =>
-                prev === "真人驗證失敗，請重新驗證。" ? "" : prev
+                prev.includes("驗證") ? "" : prev
               );
             }}
             onExpire={() => setCaptchaToken("")}

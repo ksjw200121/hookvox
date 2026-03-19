@@ -52,23 +52,28 @@ function RegisterForm() {
       return;
     }
 
-    const { error } = await supabase.auth.signUp({
-      email,
-      password,
-      options: {
-        captchaToken,
-        emailRedirectTo: `${window.location.origin}${loginHref}`,
-      },
-    });
+    try {
+      const { error } = await supabase.auth.signUp({
+        email,
+        password,
+        options: {
+          captchaToken,
+          emailRedirectTo: `${window.location.origin}${loginHref}`,
+        },
+      });
 
-    if (error) {
-      setMessage(translateSupabaseAuthError(error.message));
+      if (error) {
+        setMessage(translateSupabaseAuthError(error.message));
+        setLoading(false);
+        return;
+      }
+
+      setSuccess(true);
       setLoading(false);
-      return;
+    } catch (err: unknown) {
+      setMessage(translateSupabaseAuthError((err as Error)?.message || "Failed to fetch"));
+      setLoading(false);
     }
-
-    setSuccess(true);
-    setLoading(false);
   };
 
   const handleResendVerification = async () => {
@@ -81,24 +86,29 @@ function RegisterForm() {
       return;
     }
 
-    const { error } = await supabase.auth.resend({
-      type: "signup",
-      email,
-      options: {
-        captchaToken: resendCaptchaToken,
-        emailRedirectTo: `${window.location.origin}${loginHref}`,
-      },
-    });
+    try {
+      const { error } = await supabase.auth.resend({
+        type: "signup",
+        email,
+        options: {
+          captchaToken: resendCaptchaToken,
+          emailRedirectTo: `${window.location.origin}${loginHref}`,
+        },
+      });
 
-    if (error) {
-      setResendMessage(translateSupabaseAuthError(error.message));
+      if (error) {
+        setResendMessage(translateSupabaseAuthError(error.message));
+        setResendLoading(false);
+        return;
+      }
+
+      setResendMessage("驗證信已重新寄出，請檢查信箱。");
+      setResendCaptchaToken("");
       setResendLoading(false);
-      return;
+    } catch (err: unknown) {
+      setResendMessage(translateSupabaseAuthError((err as Error)?.message || "Failed to fetch"));
+      setResendLoading(false);
     }
-
-    setResendMessage("驗證信已重新寄出，請檢查信箱。");
-    setResendCaptchaToken("");
-    setResendLoading(false);
   };
 
   if (success) {
