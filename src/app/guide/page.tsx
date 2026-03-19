@@ -1,8 +1,9 @@
 import Link from "next/link";
 
-import step1Img from "../../../assets/guide_step1_start_create_red_arrow.png";
-import step2Img from "../../../assets/guide_step2_1080p_red_arrow.png";
-import step3Img from "../../../assets/guide_step3_settings_480p24_export_red_arrow.png";
+// 使用 public 內的圖片（部署到 Vercel 時不會因為本機 assets/路徑不同而失敗）
+const step1Img = "/guide-steps/step1.png";
+const step2Img = "/guide-steps/step2.png";
+const step3Img = "/guide-steps/step3.png";
 
 /** 每個大步驟底下拆成「連國小生都懂」的小步驟 */
 const steps = [
@@ -198,7 +199,7 @@ export default function GuidePage() {
                       <div style={{ display: "grid", gap: 16 }}>
                         <div style={{ display: "grid", gap: 10 }}>
                           <div className="text-white/90 font-bold text-sm">步驟 1：按「开始创作」</div>
-                          <img src={step1Img.src} alt="開始創作步驟" style={{ width: "100%", borderRadius: 12 }} />
+                          <img src={step1Img} alt="開始創作步驟" style={{ width: "100%", borderRadius: 12 }} />
                           <div className="text-white/70 text-sm leading-relaxed">
                             按下後進入編輯頁面，準備調輸出設定。
                           </div>
@@ -206,7 +207,7 @@ export default function GuidePage() {
 
                         <div style={{ display: "grid", gap: 10 }}>
                           <div className="text-white/90 font-bold text-sm">步驟 2：上方選「1080P」</div>
-                          <img src={step2Img.src} alt="1080P 步驟" style={{ width: "100%", borderRadius: 12 }} />
+                          <img src={step2Img} alt="1080P 步驟" style={{ width: "100%", borderRadius: 12 }} />
                           <div className="text-white/70 text-sm leading-relaxed">
                             點到解析度選項，再往下把解析度改成 480P。
                           </div>
@@ -216,7 +217,7 @@ export default function GuidePage() {
                           <div className="text-white/90 font-bold text-sm">
                             步驟 3：把解析度/幀率/碼率調到最低，再直接「导出」
                           </div>
-                          <img src={step3Img.src} alt="480P 24/碼率/导出 步驟" style={{ width: "100%", borderRadius: 12 }} />
+                          <img src={step3Img} alt="480P 24/碼率/导出 步驟" style={{ width: "100%", borderRadius: 12 }} />
                           <div className="text-white/70 text-sm leading-relaxed">
                             建議設定：<span className="text-white font-bold">480P</span>、<span className="text-white font-bold">24fps</span>（幀率較低）、<span className="text-white font-bold">码率较低</span>。設定好就直接按右上「导出」。
                           </div>
