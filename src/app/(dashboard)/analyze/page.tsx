@@ -370,6 +370,7 @@ export default function AnalyzePage() {
       resetResults();
 
       const authHeader = await getAuthHeader();
+      let effectiveAuthHeader: Record<string, string> = { ...authHeader };
 
       let body: Record<string, any> = {};
 
@@ -395,6 +396,13 @@ export default function AnalyzePage() {
           setError("請先登入再上傳檔案");
           setLoadingAnalyze(false);
           return;
+        }
+        // 某些手機 WebView 會出現第一次拿不到 token、第二次才拿到。
+        // 這裡補上 token，避免後續 API 誤判「未登入」。
+        if (!effectiveAuthHeader.Authorization && session?.access_token) {
+          effectiveAuthHeader = {
+            Authorization: `Bearer ${session.access_token}`,
+          };
         }
         const rawName = uploadFile.name.replace(/[^a-zA-Z0-9._-]/g, "_");
         const lastDot = rawName.lastIndexOf(".");
@@ -438,7 +446,7 @@ export default function AnalyzePage() {
         } else {
           const signRes = await fetch("/api/analyze/upload-url", {
             method: "POST",
-            headers: { "Content-Type": "application/json", ...authHeader },
+            headers: { "Content-Type": "application/json", ...effectiveAuthHeader },
             body: JSON.stringify({
               fileName: uploadFile.name || "video",
               contentType,
@@ -482,9 +490,18 @@ export default function AnalyzePage() {
         return;
       }
 
+      if (!effectiveAuthHeader.Authorization) {
+        setError("登入狀態已失效，請重新登入後再試");
+        setLoadingAnalyze(false);
+        if (typeof window !== "undefined") {
+          window.location.href = `/login?redirect=${encodeURIComponent("/analyze")}`;
+        }
+        return;
+      }
+
       const res = await fetch("/api/analyze", {
         method: "POST",
-        headers: { "Content-Type": "application/json", ...authHeader },
+        headers: { "Content-Type": "application/json", ...effectiveAuthHeader },
         body: JSON.stringify(body),
       });
 
