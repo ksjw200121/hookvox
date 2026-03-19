@@ -34,13 +34,18 @@ function LoginForm() {
     setSuccessMessage("");
 
     const signInPayload: any = { email, password };
-    // Mobile/in-app browsers may fail to return turnstile token reliably.
-    // Do not hard-block login on the client; let server-side auth decide.
     if (captchaToken) {
       signInPayload.options = { captchaToken };
     }
 
     const { error } = await supabase.auth.signInWithPassword(signInPayload);
+
+    // 若 Supabase 回傳 captcha 相關錯誤，給使用者清楚的指引
+    if (error && error.message?.toLowerCase().includes("captcha")) {
+      setMessage("真人驗證尚未完成，請等待驗證框顯示「成功」後再試一次。若持續失敗，請重新整理頁面。");
+      setLoading(false);
+      return;
+    }
 
     if (error) {
       setMessage(translateSupabaseAuthError(error.message));
@@ -89,11 +94,18 @@ function LoginForm() {
           </div>
 
           <AuthTurnstile
-            onVerify={(token) => setCaptchaToken(token)}
+            onVerify={(token) => {
+              setCaptchaToken(token);
+              // 驗證成功時，清除之前可能殘留的錯誤訊息
+              setMessage((prev) =>
+                prev === "真人驗證失敗，請重新驗證。" ? "" : prev
+              );
+            }}
             onExpire={() => setCaptchaToken("")}
             onError={() => {
               setCaptchaToken("");
-              setMessage("真人驗證失敗，請重新驗證。");
+              // 不立即顯示錯誤——Turnstile 會自動重試。
+              // 只在使用者點擊登入時，若 token 仍為空才提示。
             }}
           />
 

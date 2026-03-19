@@ -271,6 +271,14 @@ export async function getUserIdFromRequest(
   const { data, error } = await supabaseAdmin.auth.getUser(token);
 
   if (error || !data?.user) {
+    // Token 可能暫時失效（Supabase 偶發回傳錯誤），等一下重試一次
+    if (error?.message?.includes("expired") || error?.status === 401) {
+      await new Promise((r) => setTimeout(r, 200));
+      const retry = await supabaseAdmin.auth.getUser(token);
+      if (!retry.error && retry.data?.user) {
+        return retry.data.user.id;
+      }
+    }
     return null;
   }
 

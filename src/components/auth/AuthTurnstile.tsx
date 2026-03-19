@@ -1,6 +1,7 @@
 "use client";
 
-import { Turnstile } from "@marsidev/react-turnstile";
+import { useRef } from "react";
+import { Turnstile, type TurnstileInstance } from "@marsidev/react-turnstile";
 
 type Props = {
   onVerify: (token: string) => void;
@@ -14,6 +15,7 @@ export default function AuthTurnstile({
   onError,
 }: Props) {
   const siteKey = process.env.NEXT_PUBLIC_TURNSTILE_SITE_KEY;
+  const ref = useRef<TurnstileInstance | null>(null);
 
   if (!siteKey) {
     return (
@@ -31,13 +33,24 @@ export default function AuthTurnstile({
     <div className="space-y-2">
       <div className="flex justify-center">
         <Turnstile
+          ref={ref}
           siteKey={siteKey}
           onSuccess={onVerify}
-          onExpire={onExpire}
-          onError={onError}
+          onExpire={() => {
+            onExpire?.();
+            // Token 過期後自動重新驗證
+            ref.current?.reset();
+          }}
+          onError={() => {
+            onError?.();
+            // 驗證失敗後自動重試一次
+            setTimeout(() => ref.current?.reset(), 1500);
+          }}
           options={{
             theme: "dark",
             size: "flexible",
+            retry: "auto",
+            retryInterval: 2000,
           }}
         />
       </div>

@@ -105,7 +105,7 @@ export async function POST(req: Request) {
     const supabaseId = await getUserIdFromRequest(req);
 
     if (!supabaseId) {
-      return NextResponse.json({ error: "未登入" }, { status: 401 });
+      return NextResponse.json({ error: "登入狀態已過期，請重新登入後再試" }, { status: 401 });
     }
 
     const body = await req.json();

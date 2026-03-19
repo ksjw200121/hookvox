@@ -3,7 +3,7 @@ import {
   getBillingAccessSnapshot,
   getUserIdFromRequest,
 } from "@/lib/usage-checker";
-import { prisma } from "@/lib/prisma";
+import { prisma, withRetry } from "@/lib/prisma";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -38,7 +38,10 @@ export async function GET(req: Request) {
     const supabaseId = await getUserIdFromRequest(req);
 
     if (!supabaseId) {
-      return NextResponse.json({ error: "未登入" }, { status: 401 });
+      return NextResponse.json(
+        { error: "登入狀態已過期，請重新登入後再試" },
+        { status: 401 }
+      );
     }
 
     const access = await getBillingAccessSnapshot(supabaseId);
@@ -49,7 +52,7 @@ export async function GET(req: Request) {
       );
     }
 
-    const orders = await prisma.$queryRaw<OrderRow[]>`
+    const orders = await withRetry(() => prisma.$queryRaw<OrderRow[]>`
         SELECT
           id,
           plan,
@@ -63,7 +66,7 @@ export async function GET(req: Request) {
         WHERE "userId" = ${access.internalUserId}
         ORDER BY "createdAt" DESC
         LIMIT 50
-      `;
+      `);
 
     return NextResponse.json({
       subscription: {
