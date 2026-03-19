@@ -33,23 +33,30 @@ function LoginForm() {
     setMessage("");
     setSuccessMessage("");
 
+    // Supabase 後台有開啟 Captcha，沒有 token 就送出會直接被拒絕（500）
+    if (!captchaToken) {
+      setMessage("請等待真人驗證完成（顯示「成功」✓）後再點擊登入。若驗證一直沒出現，請重新整理頁面。");
+      setLoading(false);
+      return;
+    }
+
     try {
-      const signInPayload: any = { email, password };
-      if (captchaToken) {
-        signInPayload.options = { captchaToken };
-      }
-
-      const { error } = await supabase.auth.signInWithPassword(signInPayload);
-
-      // 若 Supabase 回傳 captcha 相關錯誤，給使用者清楚的指引
-      if (error && error.message?.toLowerCase().includes("captcha")) {
-        setMessage("真人驗證尚未完成，請等待驗證框顯示「成功」後再試一次。若持續失敗，請重新整理頁面。");
-        setLoading(false);
-        return;
-      }
+      const { error } = await supabase.auth.signInWithPassword({
+        email,
+        password,
+        options: { captchaToken },
+      });
 
       if (error) {
-        setMessage(translateSupabaseAuthError(error.message));
+        // captcha 相關錯誤給更清楚的中文指引
+        const lowerMsg = (error.message || "").toLowerCase();
+        if (lowerMsg.includes("captcha")) {
+          setMessage("真人驗證失敗，請等待驗證框重新載入後再試。若持續失敗，請重新整理頁面。");
+          // 清掉已失效的 token，讓 Turnstile 重新產生
+          setCaptchaToken("");
+        } else {
+          setMessage(translateSupabaseAuthError(error.message));
+        }
         setLoading(false);
         return;
       }
@@ -62,7 +69,12 @@ function LoginForm() {
     } catch (err: unknown) {
       // 捕獲 "Failed to fetch" 等網路層錯誤（Supabase SDK 可能直接 throw）
       const errMsg = (err as Error)?.message || "";
-      setMessage(translateSupabaseAuthError(errMsg || "Failed to fetch"));
+      if (errMsg.toLowerCase().includes("captcha")) {
+        setMessage("真人驗證失敗，請重新整理頁面後再試。");
+        setCaptchaToken("");
+      } else {
+        setMessage(translateSupabaseAuthError(errMsg || "Failed to fetch"));
+      }
       setLoading(false);
     }
   };
@@ -103,16 +115,15 @@ function LoginForm() {
           <AuthTurnstile
             onVerify={(token) => {
               setCaptchaToken(token);
-              // 驗證成功時，清除驗證相關的殘留錯誤訊息
+              // 驗證成功時，清除之前可能殘留的錯誤訊息
               setMessage((prev) =>
-                prev.includes("驗證") ? "" : prev
+                prev.includes("驗證") || prev.includes("連線") ? "" : prev
               );
             }}
             onExpire={() => setCaptchaToken("")}
             onError={() => {
               setCaptchaToken("");
               // 不立即顯示錯誤——Turnstile 會自動重試。
-              // 只在使用者點擊登入時，若 token 仍為空才提示。
             }}
           />
 

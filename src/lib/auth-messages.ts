@@ -29,6 +29,8 @@ export function translateSupabaseAuthError(message: string) {
     ["user already registered", "這個 Email 已經註冊過了，請直接登入。"],
     ["password should be", "密碼格式不符合要求。"],
     ["rate limit", "操作太頻繁了，請稍後再試。"],
+    ["captcha verification process failed", "真人驗證處理失敗，請重新整理頁面後再試。"],
+    ["captcha_failed", "真人驗證失敗，請等待驗證重新載入後再試。"],
     ["captcha", "真人驗證尚未完成，請等待驗證框顯示「成功」後再試。"],
     ["failed to fetch", "無法連線到伺服器，請確認網路連線正常後重試。若持續失敗，可能是伺服器暫時維護中。"],
     ["networkerror", "網路連線失敗，請確認網路後重試。"],
