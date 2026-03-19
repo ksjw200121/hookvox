@@ -56,7 +56,7 @@ export default function AdminOnlyNavLink() {
 
   return (
     <Link
-      href="/admin/costs"
+      href="/admin/users"
       className="text-sm font-medium text-white/70 hover:text-white transition-colors"
     >
       Admin

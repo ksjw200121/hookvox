@@ -29,7 +29,7 @@ export default function RefundPage() {
         <section>
           <h2 className="text-xl font-bold mb-3 text-white">例外處理</h2>
           <p className="text-white/60 text-sm leading-relaxed">
-            若因系統錯誤導致重複扣款、或未開通方案卻已扣款等明顯疏失，請於 7 日內提供訂單資訊與說明，寄至 hookvox.support@gmail.com，我們將個案審核並依情況辦理全額或差額退款。
+            若因系統錯誤導致重複扣款、或未開通方案卻已扣款等明顯疏失，請於 7 日內提供訂單資訊與說明，寄至 ksjw200121@gmail.com，我們將個案審核並依情況辦理全額或差額退款。
           </p>
         </section>
 
@@ -43,7 +43,7 @@ export default function RefundPage() {
         <section>
           <h2 className="text-xl font-bold mb-3 text-white">聯絡我們</h2>
           <p className="text-white/60 text-sm leading-relaxed">
-            退款相關問題請來信：hookvox.support@gmail.com，我們將於 15 個工作天內回覆。
+            退款相關問題請來信：ksjw200121@gmail.com，我們將於 15 個工作天內回覆。
           </p>
         </section>
       </main>

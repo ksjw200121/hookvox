@@ -42,6 +42,10 @@ type UserRow = {
   name?: string | null;
   avatarUrl?: string | null;
   supabaseId: string;
+  instagramHandle?: string | null;
+  accountStatus?: string | null;
+  internalNoteSummary?: string | null;
+  role?: string | null;
   createdAt?: Date | null;
 };
 
@@ -80,6 +84,7 @@ type EffectiveAccessContext = {
   publicUser: UserRow | null;
   internalUserId: string | null;
   plan: PlanName;
+  accountStatus: string;
   subscription: SubscriptionRow | null;
   status: string;
   billingCycle: string | null;
@@ -175,6 +180,41 @@ function getBillingCycleFromMonths(months: number): string {
   return "monthly";
 }
 
+async function getQuotaAdjustmentTotal(
+  publicUserId: string | null,
+  feature: UsageFeature,
+  cycleStart: string,
+  cycleEnd: string
+) {
+  if (!publicUserId) {
+    return 0;
+  }
+
+  const aggregate = await prisma.manualQuotaAdjustment.aggregate({
+    where: {
+      userId: publicUserId,
+      feature: feature as any,
+      revokedAt: null,
+      effectiveFrom: {
+        lt: new Date(cycleEnd),
+      },
+      OR: [
+        { effectiveTo: null },
+        {
+          effectiveTo: {
+            gte: new Date(cycleStart),
+          },
+        },
+      ],
+    },
+    _sum: {
+      delta: true,
+    },
+  });
+
+  return Number(aggregate._sum.delta || 0);
+}
+
 function getActivePaidOrderFromRow(order: PaidOrderRow | null): ActivePaidOrder | null {
   if (!order) {
     return null;
@@ -254,7 +294,18 @@ export async function ensurePublicUserBySupabaseId(
 ): Promise<UserRow | null> {
   const existingUser = await prisma.user.findUnique({
     where: { supabaseId },
-    select: { id: true, email: true, name: true, avatarUrl: true, supabaseId: true, createdAt: true },
+    select: {
+      id: true,
+      email: true,
+      name: true,
+      avatarUrl: true,
+      supabaseId: true,
+      instagramHandle: true,
+      accountStatus: true,
+      internalNoteSummary: true,
+      role: true,
+      createdAt: true,
+    },
   });
   if (existingUser) {
     return existingUser as UserRow;
@@ -285,7 +336,18 @@ export async function ensurePublicUserBySupabaseId(
         avatarUrl: fallbackAvatar,
         supabaseId,
       },
-      select: { id: true, email: true, name: true, avatarUrl: true, supabaseId: true, createdAt: true },
+      select: {
+        id: true,
+        email: true,
+        name: true,
+        avatarUrl: true,
+        supabaseId: true,
+        instagramHandle: true,
+        accountStatus: true,
+        internalNoteSummary: true,
+        role: true,
+        createdAt: true,
+      },
     });
     return insertedUser as UserRow;
   } catch (error) {
@@ -293,13 +355,35 @@ export async function ensurePublicUserBySupabaseId(
     if (fallbackEmail) {
       const existingByEmail = await prisma.user.findUnique({
         where: { email: fallbackEmail },
-        select: { id: true, email: true, name: true, avatarUrl: true, supabaseId: true, createdAt: true },
+        select: {
+          id: true,
+          email: true,
+          name: true,
+          avatarUrl: true,
+          supabaseId: true,
+          instagramHandle: true,
+          accountStatus: true,
+          internalNoteSummary: true,
+          role: true,
+          createdAt: true,
+        },
       });
       if (existingByEmail) {
         const updated = await prisma.user.update({
           where: { id: existingByEmail.id },
           data: { supabaseId },
-          select: { id: true, email: true, name: true, avatarUrl: true, supabaseId: true, createdAt: true },
+          select: {
+            id: true,
+            email: true,
+            name: true,
+            avatarUrl: true,
+            supabaseId: true,
+            instagramHandle: true,
+            accountStatus: true,
+            internalNoteSummary: true,
+            role: true,
+            createdAt: true,
+          },
         });
         return updated as UserRow;
       }
@@ -558,6 +642,7 @@ async function getEffectiveAccessContext(
       publicUser: null,
       internalUserId: null,
       plan: "FREE",
+      accountStatus: "ACTIVE",
       subscription: null,
       status: "FREE",
       billingCycle: null,
@@ -605,12 +690,16 @@ async function getEffectiveAccessContext(
     effectivePlan === "FREE"
       ? String(subscription?.status || "FREE").trim().toUpperCase() || "FREE"
       : "ACTIVE";
+  const accountStatus = String(publicUser.accountStatus || "ACTIVE")
+    .trim()
+    .toUpperCase();
 
   return {
     supabaseId,
     publicUser,
     internalUserId: publicUser.id,
     plan: effectivePlan,
+    accountStatus,
     subscription,
     status,
     billingCycle,
@@ -642,6 +731,7 @@ export async function getUserPlan(supabaseId: string): Promise<PlanName> {
 export async function getBillingAccessSnapshot(supabaseId: string): Promise<{
   internalUserId: string | null;
   plan: PlanName;
+  accountStatus: string;
   status: string;
   billingCycle: string | null;
   startDate: string | null;
@@ -651,6 +741,7 @@ export async function getBillingAccessSnapshot(supabaseId: string): Promise<{
   return {
     internalUserId: context.internalUserId,
     plan: context.plan,
+    accountStatus: context.accountStatus,
     status: context.status,
     billingCycle: context.billingCycle,
     startDate: context.subscription?.startDate ?? context.cycleAnchor,
@@ -685,6 +776,7 @@ export function getActionGroup(action: string): UsageFeature | null {
 
 export type UsageSnapshot = {
   plan: PlanName;
+  accountStatus?: string;
   usage: {
     analyze: {
       used: number;
@@ -692,6 +784,7 @@ export type UsageSnapshot = {
       remaining: number;
       cycleStart: string | null;
       cycleEnd: string | null;
+      adjustment: number;
     };
     generate: {
       used: number;
@@ -699,6 +792,7 @@ export type UsageSnapshot = {
       remaining: number;
       cycleStart: string | null;
       cycleEnd: string | null;
+      adjustment: number;
     };
     week: { analyze: number; generate: number };
   };
@@ -750,6 +844,10 @@ export async function getUsageSnapshotForSupabaseId(
   const usedGenerate =
     (cycleLogs || []).filter((row: any) => getActionGroup(row.action) === "GENERATE")
       .length || 0;
+  const [analyzeAdjustment, generateAdjustment] = await Promise.all([
+    getQuotaAdjustmentTotal(context.internalUserId, "ANALYZE", cycleStart, cycleEnd),
+    getQuotaAdjustmentTotal(context.internalUserId, "GENERATE", cycleStart, cycleEnd),
+  ]);
 
   let weekAnalyze = 0;
   let weekGenerate = 0;
@@ -759,11 +857,12 @@ export async function getUsageSnapshotForSupabaseId(
     if (group === "GENERATE") weekGenerate += 1;
   }
 
-  const analyzeLimit = LIMITS[plan].ANALYZE;
-  const generateLimit = LIMITS[plan].GENERATE;
+  const analyzeLimit = Math.max(LIMITS[plan].ANALYZE + analyzeAdjustment, 0);
+  const generateLimit = Math.max(LIMITS[plan].GENERATE + generateAdjustment, 0);
 
   return {
     plan,
+    accountStatus: context.accountStatus,
     usage: {
       analyze: {
         used: usedAnalyze,
@@ -771,6 +870,7 @@ export async function getUsageSnapshotForSupabaseId(
         remaining: Math.max(analyzeLimit - usedAnalyze, 0),
         cycleStart,
         cycleEnd,
+        adjustment: analyzeAdjustment,
       },
       generate: {
         used: usedGenerate,
@@ -778,6 +878,7 @@ export async function getUsageSnapshotForSupabaseId(
         remaining: Math.max(generateLimit - usedGenerate, 0),
         cycleStart,
         cycleEnd,
+        adjustment: generateAdjustment,
       },
       week: { analyze: weekAnalyze, generate: weekGenerate },
     },
@@ -813,12 +914,18 @@ export async function checkUsageLimit(
 > {
   const context = await getEffectiveAccessContext(supabaseId);
   const plan = context.plan;
-  const limit = LIMITS[plan][feature];
 
   const { cycleStart, cycleEnd } = getCurrentCycleWindow(
     context.cycleAnchor,
     context.cycleMonths
   );
+  const adjustment = await getQuotaAdjustmentTotal(
+    context.internalUserId,
+    feature,
+    cycleStart,
+    cycleEnd
+  );
+  const limit = Math.max(LIMITS[plan][feature] + adjustment, 0);
 
   const data = await prisma.usageLog.findMany({
     where: {
@@ -836,6 +943,20 @@ export async function checkUsageLimit(
       .length || 0;
 
   const remaining = Math.max(limit - used, 0);
+
+  if (context.accountStatus === "SUSPENDED") {
+    return {
+      allowed: false,
+      message: "ACCOUNT_SUSPENDED",
+      plan,
+      feature,
+      used,
+      limit,
+      remaining,
+      cycleStart,
+      cycleEnd,
+    };
+  }
 
   if (used >= limit) {
     return {
@@ -898,10 +1019,12 @@ export async function logUsage(
   action: UsageAction
 ): Promise<void> {
   const now = new Date();
+  const publicUser = await ensurePublicUserBySupabaseId(userId);
   await prisma.usageLog.create({
     data: {
       id: crypto.randomUUID(),
       userId,
+      publicUserId: publicUser?.id || null,
       action: action as any,
       date: now,
       createdAt: now,

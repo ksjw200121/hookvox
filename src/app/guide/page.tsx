@@ -220,7 +220,7 @@ export default function GuidePage() {
             <Link href="/terms" className="hover:text-white transition-colors">服務條款</Link>
             <Link href="/privacy" className="hover:text-white transition-colors">隱私權政策</Link>
             <Link href="/refund" className="hover:text-white transition-colors">退款政策</Link>
-            <a href="mailto:hookvox.support@gmail.com" className="hover:text-white transition-colors">聯繫我們</a>
+            <a href="mailto:ksjw200121@gmail.com" className="hover:text-white transition-colors">聯繫我們</a>
           </div>
         </div>
       </footer>

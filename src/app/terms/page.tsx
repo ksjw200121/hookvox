@@ -83,7 +83,7 @@ export default function TermsPage() {
           },
           {
             title: '10. 聯絡方式',
-            content: `如有任何問題，請聯絡：hookvox.support@gmail.com`,
+            content: `如有任何問題，請聯絡：ksjw200121@gmail.com`,
           },
         ].map(section => (
           <section key={section.title}>

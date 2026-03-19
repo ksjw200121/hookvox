@@ -1142,7 +1142,7 @@ export default function AnalyzePage() {
             >
               <div style={{ marginBottom: 8 }}>{error}</div>
               <div style={{ fontSize: 13, color: "#f5b4b4", marginBottom: 10 }}>
-                若為額度不足請至方案頁升級；若為網路或系統問題可重試或聯絡 hookvox.support@gmail.com
+                若為額度不足請至方案頁升級；若為網路或系統問題可重試或聯絡 ksjw200121@gmail.com
               </div>
               <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
                 <Link

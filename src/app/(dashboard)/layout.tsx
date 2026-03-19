@@ -134,10 +134,10 @@ export default function DashboardLayout({
               退款政策
             </Link>
             <a
-              href="mailto:hookvox.support@gmail.com?subject=Hookvox%20客服協助"
+              href="mailto:ksjw200121@gmail.com?subject=Hookvox%20聯繫我們"
               className="hover:text-white/60 transition-colors"
             >
-              聯繫客服
+              聯繫我們
             </a>
           </div>
         </div>

@@ -287,6 +287,16 @@ export async function POST(
     const usage = await checkUsageLimit(userId, "GENERATE");
 
     if (!usage.allowed) {
+      if (usage.message === "ACCOUNT_SUSPENDED") {
+        return NextResponse.json(
+          {
+            error: "此帳號目前已被暫停使用，請聯繫我們處理",
+            accountSuspended: true,
+          },
+          { status: 403 }
+        );
+      }
+
       return NextResponse.json(
         {
           error: `本月生成次數已達上限 ${usage.limit} 次，已使用 ${usage.used} 次，請升級方案繼續使用`,

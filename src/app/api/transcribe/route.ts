@@ -46,6 +46,16 @@ export async function POST(req: Request) {
     const usage = await checkUsageLimit(userId, "ANALYZE");
 
     if (!usage.allowed) {
+      if (usage.message === "ACCOUNT_SUSPENDED") {
+        return NextResponse.json(
+          {
+            error: "此帳號目前已被暫停使用，請聯繫我們處理",
+            accountSuspended: true,
+          },
+          { status: 403 }
+        );
+      }
+
       return NextResponse.json(
         { error: "ANALYZE_LIMIT_REACHED" },
         { status: 403 }

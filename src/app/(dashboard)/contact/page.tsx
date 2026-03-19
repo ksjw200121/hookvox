@@ -6,7 +6,7 @@ export default function ContactPage() {
   return (
     <div className="max-w-2xl mx-auto space-y-8 animate-fade-in">
       <div>
-        <h1 className="text-3xl font-black mb-2">聯繫客服</h1>
+        <h1 className="text-3xl font-black mb-2">聯繫我們</h1>
         <p className="text-white/40">
           訂閱、付款、功能問題都歡迎透過以下方式聯絡我們，我們會盡快回覆。
         </p>
@@ -16,10 +16,10 @@ export default function ContactPage() {
         <div>
           <h2 className="text-sm font-bold text-white/50 mb-2">信箱</h2>
           <a
-            href="mailto:hookvox.support@gmail.com"
+            href="mailto:ksjw200121@gmail.com"
             className="text-lg font-medium text-brand-400 hover:text-brand-300 transition-colors break-all"
           >
-            hookvox.support@gmail.com
+            ksjw200121@gmail.com
           </a>
           <p className="text-white/40 text-sm mt-1">
             來信請註明訂單編號或問題類型，我們會於 1～3 個工作天內回覆。
