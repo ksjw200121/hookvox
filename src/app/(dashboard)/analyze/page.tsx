@@ -287,27 +287,10 @@ export default function AnalyzePage() {
     setError("");
     setUsageLimitReached(false);
 
-    const allowedTypes = [
-      "audio/mpeg",
-      "audio/mp3",
-      "audio/mp4",
-      "audio/m4a",
-      "audio/x-m4a",
-      "audio/wav",
-      "audio/x-wav",
-      "video/mp4",
-      "video/webm",
-      "video/quicktime",
-      "audio/ogg",
-      "audio/flac",
-    ];
-
-    // Mobile Web / app gallery often returns empty or generic file.type.
-    // Fallback to filename extension so users can still upload and see the ✅ state.
     const rawName = String(file.name || "");
     const lastDot = rawName.lastIndexOf(".");
     const fileExt = lastDot > 0 ? rawName.slice(lastDot + 1).toLowerCase() : "";
-    const allowedExts = [
+    const knownMediaExts = [
       "mp3",
       "mpeg",
       "m4a",
@@ -318,17 +301,41 @@ export default function AnalyzePage() {
       "ogg",
       "flac",
     ];
+    const clearlyUnsupportedExts = [
+      "jpg",
+      "jpeg",
+      "png",
+      "gif",
+      "webp",
+      "pdf",
+      "doc",
+      "docx",
+      "xls",
+      "xlsx",
+      "ppt",
+      "pptx",
+      "zip",
+      "rar",
+      "7z",
+      "txt",
+      "json",
+      "csv",
+    ];
 
     const hasMime = !!file.type;
     const hasExt = !!fileExt;
+    const mimeLower = (file.type || "").toLowerCase();
+    const isMediaMime = mimeLower.startsWith("audio/") || mimeLower.startsWith("video/");
+    const isKnownMediaExt = hasExt && knownMediaExts.includes(fileExt);
+    const isClearlyUnsupportedExt = hasExt && clearlyUnsupportedExts.includes(fileExt);
 
-    // 若手機沒有提供明確副檔名（常見），不要用 file.type 的特定字串去拒絕，
-    // 否則例如 file.type=video/hevc 會被誤判成不支援。
-    const invalidByMime = hasExt ? hasMime && !allowedTypes.includes(file.type) : false;
-    const invalidByExt = hasExt && !allowedExts.includes(fileExt || "");
+    // 手機相簿常回傳奇怪 mime（例如 video/hevc）或甚至沒有副檔名，
+    // 這裡改成只擋「很明確不是音訊/影片」的檔案，其他先放行。
+    const shouldReject =
+      (!isMediaMime && !isKnownMediaExt && isClearlyUnsupportedExt) ||
+      (hasMime && !isMediaMime && !hasExt);
 
-    // 若手機無法提供 mime/type 或副檔名，我們先允許通過，後續再用 upload 內容推論。
-    if (invalidByMime || invalidByExt) {
+    if (shouldReject) {
       setUploadError("不支援的檔案格式，請上傳 mp3 / mp4 / m4a / wav / webm（勿用 .mov，請先轉成 mp4）");
       setUploadFile(null);
       setUploadSuccess(false);
