@@ -124,16 +124,28 @@ export default function DashboardLayout({
         <div className="mx-auto max-w-7xl px-6 flex flex-col md:flex-row items-center justify-between gap-3 text-xs text-white/30">
           <span>© 2026 Hookvox — by 金孫</span>
           <div className="flex gap-4">
-            <Link href="/terms" className="hover:text-white/60 transition-colors">
+            <Link
+              href="/terms"
+              target="_blank"
+              rel="noopener noreferrer"
+              className="hover:text-white/60 transition-colors"
+            >
               服務條款
             </Link>
             <Link
               href="/privacy"
+              target="_blank"
+              rel="noopener noreferrer"
               className="hover:text-white/60 transition-colors"
             >
               隱私權政策
             </Link>
-            <Link href="/refund" className="hover:text-white/60 transition-colors">
+            <Link
+              href="/refund"
+              target="_blank"
+              rel="noopener noreferrer"
+              className="hover:text-white/60 transition-colors"
+            >
               退款政策
             </Link>
             <Link href="/contact" className="hover:text-white/60 transition-colors">
