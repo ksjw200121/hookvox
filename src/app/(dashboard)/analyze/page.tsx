@@ -145,8 +145,17 @@ async function getAuthHeader(): Promise<Record<string, string>> {
   const {
     data: { session },
   } = await supabase.auth.getSession();
-  if (!session?.access_token) return {};
-  return { Authorization: `Bearer ${session.access_token}` };
+  if (session?.access_token) {
+    return { Authorization: `Bearer ${session.access_token}` };
+  }
+
+  // Mobile WebView occasionally returns empty session on first read.
+  // Try one refresh cycle before treating user as unauthenticated.
+  const { data: refreshed } = await supabase.auth.refreshSession();
+  if (refreshed?.session?.access_token) {
+    return { Authorization: `Bearer ${refreshed.session.access_token}` };
+  }
+  return {};
 }
 
 async function refreshUsageAndBroadcast() {

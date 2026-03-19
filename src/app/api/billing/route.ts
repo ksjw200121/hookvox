@@ -90,9 +90,20 @@ export async function GET(req: Request) {
   } catch (error: unknown) {
     const err = error as Error;
     console.error("billing api error:", err);
+    const message = String(err?.message || "");
+    const isDbConnectivityIssue =
+      message.includes("Can't reach database server") ||
+      message.includes("ECONNREFUSED") ||
+      message.includes("ETIMEDOUT") ||
+      message.includes("P1001");
+
     return NextResponse.json(
-      { error: err?.message || "伺服器錯誤" },
-      { status: 500 }
+      {
+        error: isDbConnectivityIssue
+          ? "帳單資料暫時無法連線，請稍後再試"
+          : "伺服器暫時忙碌，請稍後再試",
+      },
+      { status: isDbConnectivityIssue ? 503 : 500 }
     );
   }
 }
