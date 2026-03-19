@@ -33,19 +33,14 @@ function LoginForm() {
     setMessage("");
     setSuccessMessage("");
 
-    if (!captchaToken) {
-      setMessage("請先完成真人驗證。");
-      setLoading(false);
-      return;
+    const signInPayload: any = { email, password };
+    // Mobile/in-app browsers may fail to return turnstile token reliably.
+    // Do not hard-block login on the client; let server-side auth decide.
+    if (captchaToken) {
+      signInPayload.options = { captchaToken };
     }
 
-    const { error } = await supabase.auth.signInWithPassword({
-      email,
-      password,
-      options: {
-        captchaToken,
-      },
-    });
+    const { error } = await supabase.auth.signInWithPassword(signInPayload);
 
     if (error) {
       setMessage(translateSupabaseAuthError(error.message));
