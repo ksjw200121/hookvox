@@ -118,9 +118,9 @@ const PURPOSE_COLORS: Record<string, string> = {
   CTA: "#4ade80",
 };
 
-// 手機在檔案選取時，常見情況是沒有完整副檔名或只給容器類型，
-// 所以這裡至少要包含 HEVC 常見容器 `m4v`（有些 iOS 會是 m4v）。
-const ACCEPTED_FILE_TYPES = ".mp3,.mp4,.m4a,.m4v,.wav,.webm,.ogg,.flac,.mpeg,.mpga";
+// 手機選檔常常拿不到副檔名，直接放寬為 audio/video 類型，
+// 避免 iOS HEVC 或相簿匯出的檔案在選取階段就被擋掉。
+const ACCEPTED_FILE_TYPES = "audio/*,video/*,.mp3,.mp4,.m4a,.m4v,.wav,.webm,.ogg,.flac,.mpeg,.mpga";
 // 小檔直接送 API（請求 body 上限約 4.5 MB，base64 約 1.33 倍 → 約 3 MB）
 const MAX_INLINE_MB = 3;
 const MAX_INLINE_BYTES = MAX_INLINE_MB * 1024 * 1024;
@@ -304,10 +304,9 @@ export default function AnalyzePage() {
 
     // Mobile Web / app gallery often returns empty or generic file.type.
     // Fallback to filename extension so users can still upload and see the ✅ state.
-    const fileExt = String(file.name || "")
-      .split(".")
-      .pop()
-      ?.toLowerCase();
+    const rawName = String(file.name || "");
+    const lastDot = rawName.lastIndexOf(".");
+    const fileExt = lastDot > 0 ? rawName.slice(lastDot + 1).toLowerCase() : "";
     const allowedExts = [
       "mp3",
       "mpeg",
