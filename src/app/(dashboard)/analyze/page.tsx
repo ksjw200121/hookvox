@@ -396,12 +396,9 @@ export default function AnalyzePage() {
           setLoadingAnalyze(false);
           return;
         }
-        const base = uploadFile.name.replace(/[^a-zA-Z0-9._-]/g, "_");
-        const lastDot = base.lastIndexOf(".");
-        const ext = lastDot >= 0 ? base.slice(lastDot) : "";
-        const baseName = lastDot >= 0 ? base.slice(0, lastDot) : base;
-        const safeName = (baseName.slice(0, 80 - ext.length) || "video") + (ext || ".mp4");
-        const storagePath = `${session.user.id}/${Date.now()}-${safeName}`;
+        const rawName = uploadFile.name.replace(/[^a-zA-Z0-9._-]/g, "_");
+        const lastDot = rawName.lastIndexOf(".");
+        const ext = lastDot >= 0 ? rawName.slice(lastDot) : "";
 
         const normalizedExt = String(ext || "")
           .replace(/^\./, "")
@@ -439,14 +436,45 @@ export default function AnalyzePage() {
           const base64 = btoa(binary);
           body = isVideo ? { videoBase64: base64 } : { audioBase64: base64 };
         } else {
-          const { error: uploadErr } = await supabase.storage
-            .from("analyze-uploads")
-            .upload(storagePath, uploadFile, { contentType, upsert: false });
-          if (uploadErr) {
-            setError(uploadErr.message || "上傳失敗，請檢查是否已建立 Storage 桶「analyze-uploads」");
+          const signRes = await fetch("/api/analyze/upload-url", {
+            method: "POST",
+            headers: { "Content-Type": "application/json", ...authHeader },
+            body: JSON.stringify({
+              fileName: uploadFile.name || "video",
+              contentType,
+            }),
+          });
+          const signData = await readJsonSafe(signRes);
+          if (!signRes.ok) {
+            setError(signData?.error || "無法建立上傳連結，請稍後再試");
             setLoadingAnalyze(false);
             return;
           }
+
+          const signedUrl = String(signData?.signedUrl || signData?.signedURL || "").trim();
+          const storagePath = String(signData?.storagePath || signData?.path || "").trim();
+
+          if (!signedUrl || !storagePath) {
+            setError("上傳連結無效，請稍後再試");
+            setLoadingAnalyze(false);
+            return;
+          }
+
+          const uploadRes = await fetch(signedUrl, {
+            method: "PUT",
+            headers: {
+              "Content-Type": contentType,
+            },
+            body: uploadFile,
+          });
+
+          if (!uploadRes.ok) {
+            const uploadText = await uploadRes.text().catch(() => "");
+            setError(uploadText || "大檔上傳失敗，請稍後再試");
+            setLoadingAnalyze(false);
+            return;
+          }
+
           body = { storagePath };
         }
       } else {
