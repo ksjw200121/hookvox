@@ -1,5 +1,9 @@
 import Link from "next/link";
 
+import step1Img from "../../../assets/guide_step1_start_create_red_arrow.png";
+import step2Img from "../../../assets/guide_step2_1080p_red_arrow.png";
+import step3Img from "../../../assets/guide_step3_settings_480p24_export_red_arrow.png";
+
 /** 每個大步驟底下拆成「連國小生都懂」的小步驟 */
 const steps = [
   {
@@ -179,22 +183,78 @@ export default function GuidePage() {
                 </Link>
               </div>
 
-              <div className="space-y-4">
-                <div className="text-sm font-bold text-white/80">具體怎麼做：</div>
-                <ol className="space-y-3">
-                  {s.detail.map((item, j) => (
-                    <li
-                      key={j}
-                      className="flex gap-3 text-white/85 text-sm leading-relaxed"
-                    >
-                      <span className="shrink-0 w-6 h-6 rounded-full bg-brand-500/25 text-brand-300 text-xs font-bold flex items-center justify-center">
-                        {j + 1}
-                      </span>
-                      <span>{item}</span>
-                    </li>
-                  ))}
-                </ol>
-              </div>
+              {s.id === "upload-files" ? (
+                <div className="space-y-6">
+                  <div className="rounded-xl border border-red-500/25 bg-red-500/10 p-5">
+                    <div className="text-red-300 font-black text-lg mb-2">規則：只上傳「24MB 以下」影片</div>
+                    <div className="text-white/80 text-sm leading-relaxed">
+                      目前轉錄服務對單檔有上限（約 25MB），所以系統用 <span className="text-red-200 font-bold">24MB</span> 作安全值，避免你上傳後在轉錄階段失敗。
+                    </div>
+                  </div>
+
+                  <div className="space-y-3">
+                    <div className="text-sm font-bold text-white/80">一鍵照做（剪映 / CapCut 壓縮）</div>
+                    <div className="rounded-xl bg-white/5 border border-white/10 p-4">
+                      <div style={{ display: "grid", gap: 16 }}>
+                        <div style={{ display: "grid", gap: 10 }}>
+                          <div className="text-white/90 font-bold text-sm">步驟 1：按「开始创作」</div>
+                          <img src={step1Img.src} alt="開始創作步驟" style={{ width: "100%", borderRadius: 12 }} />
+                          <div className="text-white/70 text-sm leading-relaxed">
+                            按下後進入編輯頁面，準備調輸出設定。
+                          </div>
+                        </div>
+
+                        <div style={{ display: "grid", gap: 10 }}>
+                          <div className="text-white/90 font-bold text-sm">步驟 2：上方選「1080P」</div>
+                          <img src={step2Img.src} alt="1080P 步驟" style={{ width: "100%", borderRadius: 12 }} />
+                          <div className="text-white/70 text-sm leading-relaxed">
+                            點到解析度選項，再往下把解析度改成 480P。
+                          </div>
+                        </div>
+
+                        <div style={{ display: "grid", gap: 10 }}>
+                          <div className="text-white/90 font-bold text-sm">
+                            步驟 3：把解析度/幀率/碼率調到最低，再直接「导出」
+                          </div>
+                          <img src={step3Img.src} alt="480P 24/碼率/导出 步驟" style={{ width: "100%", borderRadius: 12 }} />
+                          <div className="text-white/70 text-sm leading-relaxed">
+                            建議設定：<span className="text-white font-bold">480P</span>、<span className="text-white font-bold">24fps</span>（幀率較低）、<span className="text-white font-bold">码率较低</span>。設定好就直接按右上「导出」。
+                          </div>
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+
+                  <div className="rounded-xl bg-amber-500/10 border border-amber-500/20 p-4">
+                    <div className="text-xs font-bold text-amber-300/90 mb-2">合法合規提醒</div>
+                    <div className="text-white/80 text-sm leading-relaxed">
+                      請只使用你自己拍攝的原檔，或你已取得授權/可合法取得的影片素材。若創作者關閉下載，請不要嘗試繞過限制；正確作法是直接向原作者/團隊索取原檔與授權。
+                    </div>
+                  </div>
+
+                  <div className="text-white/70 text-sm leading-relaxed">
+                    壓縮後請確認檔案大小 <span className="text-white font-bold">小於 24MB</span> 再上傳。
+                    若還是超過：再縮短片長（例如只截需要分析的 30～60 秒）或把輸出參數再往更低一點。
+                  </div>
+                </div>
+              ) : (
+                <div className="space-y-4">
+                  <div className="text-sm font-bold text-white/80">具體怎麼做：</div>
+                  <ol className="space-y-3">
+                    {s.detail.map((item, j) => (
+                      <li
+                        key={j}
+                        className="flex gap-3 text-white/85 text-sm leading-relaxed"
+                      >
+                        <span className="shrink-0 w-6 h-6 rounded-full bg-brand-500/25 text-brand-300 text-xs font-bold flex items-center justify-center">
+                          {j + 1}
+                        </span>
+                        <span>{item}</span>
+                      </li>
+                    ))}
+                  </ol>
+                </div>
+              )}
 
               {s.tip && (
                 <div className="rounded-xl bg-amber-500/10 border border-amber-500/20 p-4">
