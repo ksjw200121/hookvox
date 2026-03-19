@@ -285,8 +285,41 @@ export default function AnalyzePage() {
     setError("");
     setUsageLimitReached(false);
 
-    const allowedTypes = ["audio/mpeg", "audio/mp3", "audio/mp4", "audio/m4a", "audio/x-m4a", "audio/wav", "audio/x-wav", "video/mp4", "video/webm", "audio/ogg", "audio/flac"];
-    if (!allowedTypes.includes(file.type)) {
+    const allowedTypes = [
+      "audio/mpeg",
+      "audio/mp3",
+      "audio/mp4",
+      "audio/m4a",
+      "audio/x-m4a",
+      "audio/wav",
+      "audio/x-wav",
+      "video/mp4",
+      "video/webm",
+      "audio/ogg",
+      "audio/flac",
+    ];
+
+    // Mobile Web / app gallery often returns empty or generic file.type.
+    // Fallback to filename extension so users can still upload and see the ✅ state.
+    const fileExt = String(file.name || "")
+      .split(".")
+      .pop()
+      ?.toLowerCase();
+    const allowedExts = [
+      "mp3",
+      "mpeg",
+      "m4a",
+      "wav",
+      "mp4",
+      "webm",
+      "ogg",
+      "flac",
+    ];
+
+    const typeOk = file.type ? allowedTypes.includes(file.type) : true;
+    const extOk = fileExt ? allowedExts.includes(fileExt) : false;
+
+    if (!typeOk || (file.type === "" || !file.type) ? !extOk : false) {
       setUploadError("不支援的檔案格式，請上傳 mp3 / mp4 / m4a / wav / webm（勿用 .mov，請先轉成 mp4）");
       setUploadFile(null);
       setUploadSuccess(false);
@@ -354,6 +387,28 @@ export default function AnalyzePage() {
         const safeName = (baseName.slice(0, 80 - ext.length) || "video") + (ext || ".mp4");
         const storagePath = `${session.user.id}/${Date.now()}-${safeName}`;
 
+        const normalizedExt = String(ext || "")
+          .replace(/^\./, "")
+          .toLowerCase();
+        const videoExts = ["mp4", "webm"];
+        const audioExts = ["mp3", "mpeg", "m4a", "wav", "ogg", "flac"];
+        const isVideo =
+          (uploadFile.type || "").toLowerCase().startsWith("video/") ||
+          videoExts.includes(normalizedExt);
+        const inferContentType = () => {
+          const t = (uploadFile.type || "").toLowerCase();
+          if (t) return t;
+          if (normalizedExt === "mp3" || normalizedExt === "mpeg") return "audio/mpeg";
+          if (normalizedExt === "m4a") return "audio/mp4";
+          if (normalizedExt === "wav") return "audio/wav";
+          if (normalizedExt === "ogg") return "audio/ogg";
+          if (normalizedExt === "flac") return "audio/flac";
+          if (normalizedExt === "webm") return "video/webm";
+          if (normalizedExt === "mp4") return "video/mp4";
+          return isVideo ? "video/mp4" : "audio/mpeg";
+        };
+        const contentType = inferContentType();
+
         if (uploadFile.size <= MAX_INLINE_BYTES) {
           const buffer = await uploadFile.arrayBuffer();
           const bytes = new Uint8Array(buffer);
@@ -364,12 +419,11 @@ export default function AnalyzePage() {
             binary += String.fromCharCode.apply(null, Array.from(chunk));
           }
           const base64 = btoa(binary);
-          const isVideo = (uploadFile.type || "").toLowerCase().startsWith("video/");
           body = isVideo ? { videoBase64: base64 } : { audioBase64: base64 };
         } else {
           const { error: uploadErr } = await supabase.storage
             .from("analyze-uploads")
-            .upload(storagePath, uploadFile, { contentType: uploadFile.type || "video/mp4", upsert: false });
+            .upload(storagePath, uploadFile, { contentType, upsert: false });
           if (uploadErr) {
             setError(uploadErr.message || "上傳失敗，請檢查是否已建立 Storage 桶「analyze-uploads」");
             setLoadingAnalyze(false);

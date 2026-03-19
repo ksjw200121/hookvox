@@ -114,6 +114,24 @@ export default function DashboardLayout({
           </div>
         </div>
       </header>
+      {!checkingSession && !isGuest ? (
+        <nav className="md:hidden flex gap-4 overflow-x-auto px-6 pb-3 text-sm text-white/70">
+          {navItems.map((item) => (
+            <Link
+              key={item.href}
+              href={item.href}
+              className={`shrink-0 transition-colors ${
+                pathname === item.href ? "text-red-400" : "hover:text-white"
+              }`}
+            >
+              {item.label}
+            </Link>
+          ))}
+          <div className="shrink-0">
+            <AdminOnlyNavLink />
+          </div>
+        </nav>
+      ) : null}
 
       <main className="mx-auto max-w-7xl w-full px-6 py-8 flex-1">
         {children}

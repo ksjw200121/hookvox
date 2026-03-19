@@ -207,7 +207,7 @@ export default function HomePage() {
               },
               {
                 icon: "💥",
-                title: "20 個爆款標題",
+                title: "8 個爆款標題",
                 desc: "同時生成 20 個高點擊率標題，有讓人不舒服的、有意外轉折的、有具體數字的",
               },
               {
@@ -282,7 +282,7 @@ export default function HomePage() {
               {
                 step: "03",
                 title: "拿走腳本和分鏡",
-                desc: "3 種腳本版本 + 20 個標題 + 分鏡表，直接去拍",
+                desc: "3 種腳本版本 + 8 個標題 + 分鏡表，直接去拍",
               },
             ].map((s) => (
               <div key={s.step} className="glass rounded-2xl p-8">
