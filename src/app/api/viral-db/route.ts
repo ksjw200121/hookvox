@@ -28,6 +28,7 @@ export async function GET(req: NextRequest) {
     let query = supabaseAdmin
       .from('ViralDatabase')
       .select('*')
+      .eq('userId', user.id)
       .order('viralScore', { ascending: false })
       .limit(50)
 

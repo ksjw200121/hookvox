@@ -144,17 +144,6 @@ export async function POST(
       );
     }
 
-    const costGuard = await assertCostGuard("GENERATE_IDEAS");
-    if (!costGuard.allowed) {
-      return NextResponse.json(
-        {
-          error: "系統今日 AI 成本保護已啟動，請稍後再試",
-          code: costGuard.message,
-        },
-        { status: 503 }
-      );
-    }
-
     if (!process.env.ANTHROPIC_API_KEY) {
       return NextResponse.json(
         { error: "ANTHROPIC_API_KEY 未設定" },
@@ -181,6 +170,32 @@ export async function POST(
       ? analysis.nextAngles
       : [];
 
+    if (existingAngles.length > 0) {
+      return NextResponse.json({
+        success: true,
+        cached: true,
+        item: {
+          ...item,
+          analysis,
+        },
+        meta: {
+          plan,
+          angleScriptLimitPerVideo,
+        },
+      });
+    }
+
+    const costGuard = await assertCostGuard("GENERATE_IDEAS");
+    if (!costGuard.allowed) {
+      return NextResponse.json(
+        {
+          error: "系統今日 AI 成本保護已啟動，請稍後再試",
+          code: costGuard.message,
+        },
+        { status: 503 }
+      );
+    }
+
     const usage = await checkUsageLimit(userId, "GENERATE");
 
     if (!usage.allowed) {
@@ -195,21 +210,6 @@ export async function POST(
         },
         { status: 403 }
       );
-    }
-
-    if (existingAngles.length > 0) {
-      return NextResponse.json({
-        success: true,
-        cached: true,
-        item: {
-          ...item,
-          analysis,
-        },
-        meta: {
-          plan,
-          angleScriptLimitPerVideo,
-        },
-      });
     }
 
     const prompt = `請根據以下爆款分析結果，生成 3 個最值得拍的延伸角度。

@@ -66,6 +66,27 @@ type PaidOrderRow = {
   merchantTradeNo?: string | null;
 };
 
+type ActivePaidOrder = {
+  plan: PlanName;
+  billingCycle: string;
+  startDate: string;
+  endDate: string;
+  tradeNo: string | null;
+  merchantTradeNo: string | null;
+};
+
+type EffectiveAccessContext = {
+  supabaseId: string;
+  publicUser: UserRow | null;
+  internalUserId: string | null;
+  plan: PlanName;
+  subscription: SubscriptionRow | null;
+  status: string;
+  billingCycle: string | null;
+  cycleMonths: number;
+  cycleAnchor: string | null;
+};
+
 function getSupabaseAdmin() {
   return createClient(
     process.env.NEXT_PUBLIC_SUPABASE_URL!,
@@ -86,7 +107,7 @@ function getBillingCycleMonths(billingCycle?: string | null) {
   return 1;
 }
 
-function getCurrentCycleWindow(anchorInput?: string | null): {
+function getCurrentCycleWindow(anchorInput?: string | null, cycleMonths = 1): {
   cycleStart: string;
   cycleEnd: string;
 } {
@@ -97,16 +118,97 @@ function getCurrentCycleWindow(anchorInput?: string | null): {
     cycleStart = new Date();
   }
 
-  let cycleEnd = addOneMonth(cycleStart);
+  const safeCycleMonths = cycleMonths > 0 ? cycleMonths : 1;
+  let cycleEnd = new Date(cycleStart);
+  cycleEnd.setMonth(cycleEnd.getMonth() + safeCycleMonths);
 
   while (now >= cycleEnd) {
     cycleStart = cycleEnd;
-    cycleEnd = addOneMonth(cycleStart);
+    cycleEnd = new Date(cycleStart);
+    cycleEnd.setMonth(cycleEnd.getMonth() + safeCycleMonths);
   }
 
   return {
     cycleStart: cycleStart.toISOString(),
     cycleEnd: cycleEnd.toISOString(),
+  };
+}
+
+function normalizePlanName(input?: string | null): PlanName {
+  const plan = String(input || "FREE").trim().toUpperCase();
+  if (plan === "CREATOR" || plan === "PRO" || plan === "FLAGSHIP") {
+    return plan;
+  }
+  return "FREE";
+}
+
+function isPaidPlanName(plan: PlanName) {
+  return plan === "CREATOR" || plan === "PRO" || plan === "FLAGSHIP";
+}
+
+function inferCycleMonthsFromSubscription(subscription: SubscriptionRow | null) {
+  if (!subscription?.startDate || !subscription?.endDate) {
+    return 1;
+  }
+
+  const start = new Date(subscription.startDate);
+  const end = new Date(subscription.endDate);
+  if (Number.isNaN(start.getTime()) || Number.isNaN(end.getTime())) {
+    return 1;
+  }
+
+  const months =
+    (end.getFullYear() - start.getFullYear()) * 12 +
+    (end.getMonth() - start.getMonth());
+
+  if (months === 3 || months === 6 || months === 12) {
+    return months;
+  }
+
+  return 1;
+}
+
+function getBillingCycleFromMonths(months: number): string {
+  if (months === 3) return "quarterly";
+  if (months === 6) return "biannual";
+  if (months === 12) return "annual";
+  return "monthly";
+}
+
+function getActivePaidOrderFromRow(order: PaidOrderRow | null): ActivePaidOrder | null {
+  if (!order) {
+    return null;
+  }
+
+  const plan = normalizePlanName(order.plan);
+  if (!isPaidPlanName(plan)) {
+    return null;
+  }
+
+  const anchorInput = order.paidAt || order.createdAt;
+  if (!anchorInput) {
+    return null;
+  }
+
+  const startDate = new Date(anchorInput);
+  if (Number.isNaN(startDate.getTime())) {
+    return null;
+  }
+
+  const endDate = new Date(startDate);
+  endDate.setMonth(endDate.getMonth() + getBillingCycleMonths(order.billingCycle));
+
+  if (endDate <= new Date()) {
+    return null;
+  }
+
+  return {
+    plan,
+    billingCycle: String(order.billingCycle || "monthly"),
+    startDate: startDate.toISOString(),
+    endDate: endDate.toISOString(),
+    tradeNo: order.tradeNo ? String(order.tradeNo) : null,
+    merchantTradeNo: order.merchantTradeNo ? String(order.merchantTradeNo) : null,
   };
 }
 
@@ -320,6 +422,55 @@ async function getLatestPaidOrderByInternalUserId(
   return rows[0] ?? null;
 }
 
+async function syncSubscriptionFromPaidOrder(
+  internalUserId: string,
+  activePaidOrder: ActivePaidOrder
+): Promise<SubscriptionRow | null> {
+  const now = new Date();
+  const synced = await prisma.subscription.upsert({
+    where: { userId: internalUserId },
+    update: {
+      plan: activePaidOrder.plan as any,
+      status: "ACTIVE" as any,
+      startDate: new Date(activePaidOrder.startDate),
+      endDate: new Date(activePaidOrder.endDate),
+      ecpayTradeNo: activePaidOrder.tradeNo,
+      ecpayMerchantTradeNo: activePaidOrder.merchantTradeNo,
+      updatedAt: now,
+    },
+    create: {
+      userId: internalUserId,
+      plan: activePaidOrder.plan as any,
+      status: "ACTIVE" as any,
+      startDate: new Date(activePaidOrder.startDate),
+      endDate: new Date(activePaidOrder.endDate),
+      ecpayTradeNo: activePaidOrder.tradeNo,
+      ecpayMerchantTradeNo: activePaidOrder.merchantTradeNo,
+    },
+    select: {
+      id: true,
+      userId: true,
+      plan: true,
+      status: true,
+      ecpayTradeNo: true,
+      ecpayMerchantTradeNo: true,
+      startDate: true,
+      endDate: true,
+    },
+  });
+
+  return {
+    id: synced.id,
+    userId: synced.userId,
+    plan: String(synced.plan).toUpperCase() as PlanName,
+    status: String(synced.status).toUpperCase(),
+    ecpayTradeNo: synced.ecpayTradeNo ?? null,
+    ecpayMerchantTradeNo: synced.ecpayMerchantTradeNo ?? null,
+    startDate: synced.startDate?.toISOString() ?? null,
+    endDate: synced.endDate?.toISOString() ?? null,
+  };
+}
+
 async function normalizeSubscriptionState(
   subscription: SubscriptionRow
 ): Promise<SubscriptionRow> {
@@ -376,60 +527,110 @@ async function normalizeSubscriptionState(
   }
 }
 
+function getPlanFromSubscription(subscription: SubscriptionRow | null): PlanName {
+  if (!subscription) {
+    return "FREE";
+  }
+
+  const statusNormalized = String(subscription.status || "").trim().toUpperCase();
+  const planNormalized = normalizePlanName(subscription.plan);
+  const isExplicitlyInactive =
+    statusNormalized === "EXPIRED" || statusNormalized === "CANCELLED";
+  const endDate = subscription.endDate ? new Date(subscription.endDate) : null;
+  const isExpired =
+    endDate && !Number.isNaN(endDate.getTime()) && endDate <= new Date();
+
+  if (isPaidPlanName(planNormalized) && !isExplicitlyInactive && !isExpired) {
+    return planNormalized;
+  }
+
+  return "FREE";
+}
+
+async function getEffectiveAccessContext(
+  supabaseId: string
+): Promise<EffectiveAccessContext> {
+  const publicUser = await ensurePublicUserBySupabaseId(supabaseId);
+
+  if (!publicUser?.id) {
+    return {
+      supabaseId,
+      publicUser: null,
+      internalUserId: null,
+      plan: "FREE",
+      subscription: null,
+      status: "FREE",
+      billingCycle: null,
+      cycleMonths: 1,
+      cycleAnchor: null,
+    };
+  }
+
+  let subscription = await getSubscriptionReadOnly(publicUser.id);
+  if (subscription) {
+    subscription = await normalizeSubscriptionState(subscription);
+  }
+
+  const latestPaidOrder = await getLatestPaidOrderByInternalUserId(publicUser.id);
+  const activePaidOrder = getActivePaidOrderFromRow(latestPaidOrder);
+  const subscriptionPlan = getPlanFromSubscription(subscription);
+
+  if (
+    activePaidOrder &&
+    (!subscription ||
+      PLAN_LEVEL[activePaidOrder.plan] >= PLAN_LEVEL[subscriptionPlan] ||
+      subscriptionPlan === "FREE")
+  ) {
+    subscription = await syncSubscriptionFromPaidOrder(publicUser.id, activePaidOrder);
+  }
+
+  const effectivePlan = activePaidOrder
+    ? PLAN_LEVEL[activePaidOrder.plan] > PLAN_LEVEL[getPlanFromSubscription(subscription)]
+      ? activePaidOrder.plan
+      : getPlanFromSubscription(subscription)
+    : getPlanFromSubscription(subscription);
+
+  const cycleMonths = activePaidOrder
+    ? getBillingCycleMonths(activePaidOrder.billingCycle)
+    : inferCycleMonthsFromSubscription(subscription);
+  const billingCycle =
+    activePaidOrder?.billingCycle ||
+    (effectivePlan !== "FREE" ? getBillingCycleFromMonths(cycleMonths) : null);
+  const cycleAnchor =
+    subscription?.startDate ??
+    activePaidOrder?.startDate ??
+    publicUser.createdAt?.toISOString() ??
+    null;
+  const status =
+    effectivePlan === "FREE"
+      ? String(subscription?.status || "FREE").trim().toUpperCase() || "FREE"
+      : "ACTIVE";
+
+  return {
+    supabaseId,
+    publicUser,
+    internalUserId: publicUser.id,
+    plan: effectivePlan,
+    subscription,
+    status,
+    billingCycle,
+    cycleMonths,
+    cycleAnchor,
+  };
+}
+
 async function getUserContext(supabaseId: string): Promise<{
   supabaseId: string;
   internalUserId: string | null;
   plan: PlanName;
   subscription: SubscriptionRow | null;
 }> {
-  const publicUser = await ensurePublicUserBySupabaseId(supabaseId);
-
-  if (!publicUser?.id) {
-    return {
-      supabaseId,
-      internalUserId: null,
-      plan: "FREE",
-      subscription: null,
-    };
-  }
-
-  // 只讀訂閱、不自動建立 FREE 列，與 billing API 同源，避免帳單顯示 Creator 但 usage 顯示 FREE
-  const rawSubscription = await getSubscriptionReadOnly(publicUser.id);
-  if (!rawSubscription) {
-    return {
-      supabaseId,
-      internalUserId: publicUser.id,
-      plan: "FREE",
-      subscription: null,
-    };
-  }
-
-  const subscription = await normalizeSubscriptionState(rawSubscription);
-
-  const statusNormalized = String(subscription.status || "").trim().toUpperCase();
-  const planNormalized = String(subscription.plan || "FREE").trim().toUpperCase() as PlanName;
-
-  const isPaidPlan =
-    planNormalized === "CREATOR" || planNormalized === "PRO" || planNormalized === "FLAGSHIP";
-  const isExplicitlyInactive = statusNormalized === "EXPIRED" || statusNormalized === "CANCELLED";
-  const hasPaymentEvidence = Boolean((subscription as any)?.ecpayTradeNo);
-  let plan: PlanName =
-    isPaidPlan && !isExplicitlyInactive && hasPaymentEvidence ? planNormalized : "FREE";
-
-  // 升級情境：若最新 PAID 訂單方案更高，就以訂單為準
-  const paidOrder = await getLatestPaidOrderByInternalUserId(publicUser.id);
-  const paidPlan = String(paidOrder?.plan || "").trim().toUpperCase() as PlanName;
-  const isPaidOrderPlan =
-    paidPlan === "CREATOR" || paidPlan === "PRO" || paidPlan === "FLAGSHIP";
-  if (isPaidOrderPlan && PLAN_LEVEL[paidPlan] > PLAN_LEVEL[plan]) {
-    plan = paidPlan;
-  }
-
+  const context = await getEffectiveAccessContext(supabaseId);
   return {
-    supabaseId,
-    internalUserId: publicUser.id,
-    plan,
-    subscription,
+    supabaseId: context.supabaseId,
+    internalUserId: context.internalUserId,
+    plan: context.plan,
+    subscription: context.subscription,
   };
 }
 
@@ -438,25 +639,30 @@ export async function getUserPlan(supabaseId: string): Promise<PlanName> {
   return context.plan;
 }
 
+export async function getBillingAccessSnapshot(supabaseId: string): Promise<{
+  internalUserId: string | null;
+  plan: PlanName;
+  status: string;
+  billingCycle: string | null;
+  startDate: string | null;
+  endDate: string | null;
+}> {
+  const context = await getEffectiveAccessContext(supabaseId);
+  return {
+    internalUserId: context.internalUserId,
+    plan: context.plan,
+    status: context.status,
+    billingCycle: context.billingCycle,
+    startDate: context.subscription?.startDate ?? context.cycleAnchor,
+    endDate: context.subscription?.endDate ?? null,
+  };
+}
+
 /** 僅讀取訂閱方案，不建立 subscription、不拋錯，用於 usage API 錯誤時仍回傳與帳單一致的方案 */
 export async function getPlanForSupabaseIdSafe(supabaseId: string): Promise<PlanName> {
   try {
-    const publicUser = await ensurePublicUserBySupabaseId(supabaseId);
-    if (!publicUser?.id) return "FREE";
-    const sub = await prisma.subscription.findUnique({
-      where: { userId: publicUser.id },
-      select: { plan: true, status: true, endDate: true },
-    });
-    if (!sub) return "FREE";
-    const plan = String(sub.plan || "FREE").trim().toUpperCase() as PlanName;
-    const status = String(sub.status || "").trim().toUpperCase();
-    const endDate = sub.endDate ? new Date(sub.endDate) : null;
-    if (endDate && !Number.isNaN(endDate.getTime()) && endDate <= new Date())
-      return "FREE";
-    // 與帳單顯示對齊：只要是付費方案且未過期，就視為有效
-    const isPaidPlan = plan === "CREATOR" || plan === "PRO" || plan === "FLAGSHIP";
-    if (isPaidPlan) return plan;
-    return "FREE";
+    const context = await getEffectiveAccessContext(supabaseId);
+    return context.plan;
   } catch {
     return "FREE";
   }
@@ -505,110 +711,11 @@ export type UsageSnapshot = {
 export async function getUsageSnapshotForSupabaseId(
   supabaseId: string
 ): Promise<UsageSnapshot> {
-  // 對齊 public.users（同 email 會 re-link），再用 internal userId 查 subscriptions
-  const publicUser = await ensurePublicUserBySupabaseId(supabaseId);
-  let internalUserId = publicUser?.id || null;
-  const freePlanAnchor = publicUser?.createdAt?.toISOString() ?? null;
-
-  let subscription: SubscriptionRow | null = null;
-  if (internalUserId) {
-    subscription = await getSubscriptionReadOnly(internalUserId);
-    if (subscription) {
-      subscription = await normalizeSubscriptionState(subscription);
-    }
-  }
-  // Email fallback 已移除：會撿到其他帳號的舊 orders，導致誤回付費方案
-
-  // 最後保險：若訂閱仍查不到或欄位異常，改用已付款訂單推導方案（避免帳單 Creator 但 usage 變回 0/3）
-  let paidPlanFromOrders: PlanName | null = null;
-  let paidAtAnchor: string | null = null;
-  let paidBillingCycle: string | null = null;
-  let paidTradeNo: string | null = null;
-  let paidMerchantTradeNo: string | null = null;
-  if (internalUserId) {
-    const paidOrder = await getLatestPaidOrderByInternalUserId(internalUserId);
-    const p = String(paidOrder?.plan || "").trim().toUpperCase();
-    const isPaidPlan =
-      p === "CREATOR" || p === "PRO" || p === "FLAGSHIP";
-    if (isPaidPlan) {
-      paidPlanFromOrders = p as PlanName;
-      paidBillingCycle = paidOrder?.billingCycle ? String(paidOrder.billingCycle) : null;
-      paidAtAnchor = paidOrder?.paidAt ? new Date(paidOrder.paidAt).toISOString() : (
-        paidOrder?.createdAt ? new Date(paidOrder.createdAt).toISOString() : null
-      );
-      paidTradeNo = paidOrder?.tradeNo ? String(paidOrder.tradeNo) : null;
-      paidMerchantTradeNo = paidOrder?.merchantTradeNo
-        ? String(paidOrder.merchantTradeNo)
-        : null;
-    }
-  }
-
-  const status = String(subscription?.status || "").trim().toUpperCase();
-  const planRaw = String(subscription?.plan || "FREE").trim().toUpperCase();
-  const endDate = subscription?.endDate ? new Date(subscription.endDate) : null;
-  const isExpired =
-    endDate && !Number.isNaN(endDate.getTime()) && endDate <= new Date();
-
-  // 若 subscription.status 是 ACTIVE 的付費方案就直接信任
-  // （ecpayTradeNo 檢查已移除：billing self-heal 寫入時不一定帶 tradeNo，多餘條件反而造成 usage 誤判為 FREE）
-  const isPaidPlan =
-    planRaw === "CREATOR" || planRaw === "PRO" || planRaw === "FLAGSHIP";
-  const isExplicitlyInactive = status === "CANCELLED" || status === "EXPIRED";
-  const planFromSubscription: PlanName =
-    !isExpired && isPaidPlan && !isExplicitlyInactive ? (planRaw as PlanName) : "FREE";
-
-  // 升級情境：若最新 PAID 訂單方案更高，就以訂單為準（避免付款成功但方案卡在舊的）
-  const plan: PlanName =
-    paidPlanFromOrders && PLAN_LEVEL[paidPlanFromOrders] > PLAN_LEVEL[planFromSubscription]
-      ? paidPlanFromOrders
-      : planFromSubscription;
-
-  // best-effort: 以 PAID 訂單同步 subscription（升級或建立）
-  if (paidPlanFromOrders && PLAN_LEVEL[paidPlanFromOrders] > PLAN_LEVEL[planFromSubscription]) {
-    const nowIso = new Date().toISOString();
-    let cycleEndForSub: string | null = null;
-    if (paidAtAnchor) {
-      const anchor = new Date(paidAtAnchor);
-      if (!Number.isNaN(anchor.getTime())) {
-        const end = new Date(anchor);
-        end.setMonth(end.getMonth() + getBillingCycleMonths(paidBillingCycle));
-        cycleEndForSub = end.toISOString();
-      }
-    }
-    if (subscription?.id) {
-      // 更新現有 subscription
-      await prisma.subscription.update({
-        where: { id: subscription.id },
-        data: {
-          plan: paidPlanFromOrders as any,
-          status: "ACTIVE" as any,
-          updatedAt: new Date(nowIso),
-          ...(paidTradeNo ? { ecpayTradeNo: paidTradeNo } : {}),
-          ...(paidMerchantTradeNo ? { ecpayMerchantTradeNo: paidMerchantTradeNo } : {}),
-          ...(cycleEndForSub ? { endDate: new Date(cycleEndForSub) } : {}),
-        },
-      });
-    } else if (internalUserId) {
-      // 建立新 subscription（billing 來不及 self-heal 時由 usage 補建）
-      await prisma.subscription.create({
-        data: {
-          id: crypto.randomUUID(),
-          userId: internalUserId,
-          plan: paidPlanFromOrders as any,
-          status: "ACTIVE" as any,
-          startDate: new Date(paidAtAnchor || nowIso),
-          endDate: cycleEndForSub ? new Date(cycleEndForSub) : null,
-          ecpayTradeNo: paidTradeNo || null,
-          ecpayMerchantTradeNo: paidMerchantTradeNo || null,
-          createdAt: new Date(nowIso),
-          updatedAt: new Date(nowIso),
-        },
-      });
-    }
-  }
-
+  const context = await getEffectiveAccessContext(supabaseId);
+  const plan = context.plan;
   const { cycleStart, cycleEnd } = getCurrentCycleWindow(
-    subscription?.startDate ?? paidAtAnchor ?? freePlanAnchor
+    context.cycleAnchor,
+    context.cycleMonths
   );
 
   const weekStart = new Date();
@@ -704,12 +811,13 @@ export async function checkUsageLimit(
       cycleEnd: string;
     }
 > {
-  const publicUser = await ensurePublicUserBySupabaseId(supabaseId);
-  const { plan, subscription } = await getUserContext(supabaseId);
+  const context = await getEffectiveAccessContext(supabaseId);
+  const plan = context.plan;
   const limit = LIMITS[plan][feature];
 
   const { cycleStart, cycleEnd } = getCurrentCycleWindow(
-    subscription?.startDate ?? publicUser?.createdAt?.toISOString() ?? null
+    context.cycleAnchor,
+    context.cycleMonths
   );
 
   const data = await prisma.usageLog.findMany({

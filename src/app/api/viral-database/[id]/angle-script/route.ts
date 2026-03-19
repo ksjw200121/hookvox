@@ -179,17 +179,6 @@ export async function POST(
       );
     }
 
-    const costGuard = await assertCostGuard("GENERATE_ANGLE_SCRIPT");
-    if (!costGuard.allowed) {
-      return NextResponse.json(
-        {
-          error: "系統今日 AI 成本保護已啟動，請稍後再試",
-          code: costGuard.message,
-        },
-        { status: 503 }
-      );
-    }
-
     if (!process.env.ANTHROPIC_API_KEY) {
       return NextResponse.json(
         { error: "ANTHROPIC_API_KEY 未設定" },
@@ -215,19 +204,6 @@ export async function POST(
       return NextResponse.json({ error: "找不到影片資料" }, { status: 404 });
     }
 
-    const plan = await getUserPlan(userId);
-    const angleScriptLimitPerVideo = getAngleScriptLimit(plan);
-
-    if (angleScriptLimitPerVideo <= 0) {
-      return NextResponse.json(
-        {
-          error: "此方案尚未開放延伸腳本生成功能，請升級 Creator 或 Pro",
-          upgradeRequired: true,
-        },
-        { status: 403 }
-      );
-    }
-
     const analysis = normalizeAnalysis(item.analysis);
     const nextAngles = Array.isArray(analysis?.nextAngles) ? analysis.nextAngles : [];
 
@@ -249,6 +225,34 @@ export async function POST(
 
     const selectedAngle = nextAngles[angleIndex];
 
+    const plan = await getUserPlan(userId);
+    const angleScriptLimitPerVideo = getAngleScriptLimit(plan);
+
+    if (selectedAngle?.generatedScript) {
+      return NextResponse.json({
+        success: true,
+        cached: true,
+        item: {
+          ...item,
+          analysis,
+        },
+        meta: {
+          plan,
+          angleScriptLimitPerVideo,
+        },
+      });
+    }
+
+    if (angleScriptLimitPerVideo <= 0) {
+      return NextResponse.json(
+        {
+          error: "此方案尚未開放延伸腳本生成功能，請升級 Creator 或 Pro",
+          upgradeRequired: true,
+        },
+        { status: 403 }
+      );
+    }
+
     const generatedCount = nextAngles.filter((angle: any) => angle?.generatedScript).length;
 
     if (generatedCount >= angleScriptLimitPerVideo) {
@@ -269,6 +273,17 @@ export async function POST(
       );
     }
 
+    const costGuard = await assertCostGuard("GENERATE_ANGLE_SCRIPT");
+    if (!costGuard.allowed) {
+      return NextResponse.json(
+        {
+          error: "系統今日 AI 成本保護已啟動，請稍後再試",
+          code: costGuard.message,
+        },
+        { status: 503 }
+      );
+    }
+
     const usage = await checkUsageLimit(userId, "GENERATE");
 
     if (!usage.allowed) {
@@ -283,21 +298,6 @@ export async function POST(
         },
         { status: 403 }
       );
-    }
-
-    if (selectedAngle?.generatedScript) {
-      return NextResponse.json({
-        success: true,
-        cached: true,
-        item: {
-          ...item,
-          analysis,
-        },
-        meta: {
-          plan,
-          angleScriptLimitPerVideo,
-        },
-      });
     }
 
     const prompt = `請根據以下資料，生成一份延伸短影音腳本。

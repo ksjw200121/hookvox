@@ -1,4 +1,4 @@
-import { createClient } from "@supabase/supabase-js";
+import { prisma } from "@/lib/prisma";
 
 export type GuardAction =
   | "ANALYZE"
@@ -20,13 +20,6 @@ const ACTION_COSTS: Record<GuardAction, number> = {
   GENERATE_IDEAS: 0.002,
   GENERATE_ANGLE_SCRIPT: 0.01,
 };
-
-function getSupabaseAdmin() {
-  return createClient(
-    process.env.NEXT_PUBLIC_SUPABASE_URL!,
-    process.env.SUPABASE_SERVICE_ROLE_KEY!
-  );
-}
 
 function getEnvNumber(name: string, fallback: number) {
   const raw = process.env[name];
@@ -61,6 +54,11 @@ function getWindowStartIso(windowMinutes: number) {
   return new Date(rounded).toISOString();
 }
 
+function getMetricDateValue() {
+  const today = new Date().toISOString().slice(0, 10);
+  return new Date(`${today}T00:00:00.000Z`);
+}
+
 export async function assertRateLimit({
   req,
   userId,
@@ -71,46 +69,21 @@ export async function assertRateLimit({
   | { allowed: true; count: number; remaining: number }
   | { allowed: false; message: string; count: number; remaining: number }
 > {
-  const supabaseAdmin = getSupabaseAdmin();
   const ip = resolveClientIp(req);
   const scope = userId || ip;
   const windowStart = getWindowStartIso(windowMinutes);
   const key = `${routeKey}:${scope}:${windowStart}`;
 
-  const { data: existing, error: selectError } = await supabaseAdmin
-    .from("request_guards")
-    .select("id, count")
-    .eq("key", key)
-    .maybeSingle();
-
-  if (selectError) {
-    throw new Error(`Rate limit check failed: ${selectError.message}`);
-  }
-
-  if (!existing) {
-    const { error: insertError } = await supabaseAdmin.from("request_guards").insert({
-      key,
-      user_id: userId || null,
-      ip,
-      route: routeKey,
-      window_start: windowStart,
-      count: 1,
-      created_at: new Date().toISOString(),
-      updated_at: new Date().toISOString(),
-    });
-
-    if (insertError) {
-      throw new Error(`Rate limit insert failed: ${insertError.message}`);
-    }
-
-    return {
-      allowed: true,
-      count: 1,
-      remaining: Math.max(limit - 1, 0),
-    };
-  }
-
-  const nextCount = Number(existing.count || 0) + 1;
+  const result = await prisma.$queryRaw<Array<{ count: number }>>`
+    INSERT INTO request_guards ("key", user_id, ip, route, window_start, count, created_at, updated_at)
+    VALUES (${key}, ${userId || null}, ${ip}, ${routeKey}, ${new Date(windowStart)}, 1, NOW(), NOW())
+    ON CONFLICT ("key")
+    DO UPDATE SET
+      count = request_guards.count + 1,
+      updated_at = NOW()
+    RETURNING count
+  `;
+  const nextCount = Number(result[0]?.count || 0);
 
   if (nextCount > limit) {
     return {
@@ -119,18 +92,6 @@ export async function assertRateLimit({
       count: nextCount,
       remaining: 0,
     };
-  }
-
-  const { error: updateError } = await supabaseAdmin
-    .from("request_guards")
-    .update({
-      count: nextCount,
-      updated_at: new Date().toISOString(),
-    })
-    .eq("id", existing.id);
-
-  if (updateError) {
-    throw new Error(`Rate limit update failed: ${updateError.message}`);
   }
 
   return {
@@ -163,7 +124,6 @@ export async function assertCostGuard(
   const softLimit = getEnvNumber("AI_COST_SOFT_LIMIT_USD", 20);
   const hardLimit = getEnvNumber("AI_COST_HARD_LIMIT_USD", 30);
   const estimatedNextCost = ACTION_COSTS[action];
-  const supabaseAdmin = getSupabaseAdmin();
 
   if (!enabled) {
     return {
@@ -175,17 +135,15 @@ export async function assertCostGuard(
     };
   }
 
-  const today = new Date().toISOString().slice(0, 10);
-
-  const { data, error } = await supabaseAdmin
-    .from("system_runtime_metrics")
-    .select("estimated_cost_usd, hard_locked")
-    .eq("metric_date", today)
-    .maybeSingle();
-
-  if (error) {
-    throw new Error(`Cost guard check failed: ${error.message}`);
-  }
+  const data = await prisma.system_runtime_metrics.findUnique({
+    where: {
+      metric_date: getMetricDateValue(),
+    },
+    select: {
+      estimated_cost_usd: true,
+      hard_locked: true,
+    },
+  });
 
   const todayCost = Number(data?.estimated_cost_usd || 0);
   const hardLocked = Boolean(data?.hard_locked);
@@ -215,65 +173,37 @@ export async function recordEstimatedCost(action: GuardAction) {
   if (!enabled) return;
 
   const hardLimit = getEnvNumber("AI_COST_HARD_LIMIT_USD", 30);
-  const supabaseAdmin = getSupabaseAdmin();
-  const today = new Date().toISOString().slice(0, 10);
   const deltaCost = ACTION_COSTS[action];
+  const analyzeDelta = action === "ANALYZE" ? 1 : 0;
+  const generateDelta = action === "ANALYZE" ? 0 : 1;
 
-  const { data: existing, error: selectError } = await supabaseAdmin
-    .from("system_runtime_metrics")
-    .select("id, analyze_count, generate_count, estimated_cost_usd, hard_locked")
-    .eq("metric_date", today)
-    .maybeSingle();
-
-  if (selectError) {
-    throw new Error(`Cost metric load failed: ${selectError.message}`);
-  }
-
-  if (!existing) {
-    const analyzeCount = action === "ANALYZE" ? 1 : 0;
-    const generateCount = action === "ANALYZE" ? 0 : 1;
-    const estimatedCost = deltaCost;
-
-    const { error: insertError } = await supabaseAdmin
-      .from("system_runtime_metrics")
-      .insert({
-        metric_date: today,
-        analyze_count: analyzeCount,
-        generate_count: generateCount,
-        estimated_cost_usd: estimatedCost,
-        hard_locked: estimatedCost >= hardLimit,
-        created_at: new Date().toISOString(),
-        updated_at: new Date().toISOString(),
-      });
-
-    if (insertError) {
-      throw new Error(`Cost metric insert failed: ${insertError.message}`);
-    }
-
-    return;
-  }
-
-  const nextAnalyzeCount =
-    Number(existing.analyze_count || 0) + (action === "ANALYZE" ? 1 : 0);
-  const nextGenerateCount =
-    Number(existing.generate_count || 0) + (action === "ANALYZE" ? 0 : 1);
-  const nextEstimatedCost =
-    Number(existing.estimated_cost_usd || 0) + deltaCost;
-
-  const { error: updateError } = await supabaseAdmin
-    .from("system_runtime_metrics")
-    .update({
-      analyze_count: nextAnalyzeCount,
-      generate_count: nextGenerateCount,
-      estimated_cost_usd: nextEstimatedCost,
-      hard_locked: nextEstimatedCost >= hardLimit,
-      updated_at: new Date().toISOString(),
-    })
-    .eq("id", existing.id);
-
-  if (updateError) {
-    throw new Error(`Cost metric update failed: ${updateError.message}`);
-  }
+  await prisma.$executeRaw`
+    INSERT INTO system_runtime_metrics (
+      metric_date,
+      analyze_count,
+      generate_count,
+      estimated_cost_usd,
+      hard_locked,
+      created_at,
+      updated_at
+    )
+    VALUES (
+      ${getMetricDateValue()},
+      ${analyzeDelta},
+      ${generateDelta},
+      ${deltaCost},
+      ${deltaCost >= hardLimit},
+      NOW(),
+      NOW()
+    )
+    ON CONFLICT (metric_date)
+    DO UPDATE SET
+      analyze_count = system_runtime_metrics.analyze_count + ${analyzeDelta},
+      generate_count = system_runtime_metrics.generate_count + ${generateDelta},
+      estimated_cost_usd = system_runtime_metrics.estimated_cost_usd + ${deltaCost},
+      hard_locked = (system_runtime_metrics.estimated_cost_usd + ${deltaCost}) >= ${hardLimit},
+      updated_at = NOW()
+  `;
 }
 
 export function getAnalyzeRateLimit() {

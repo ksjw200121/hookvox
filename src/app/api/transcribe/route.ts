@@ -5,11 +5,13 @@ import { toFile } from "openai/uploads";
 import {
   getUserIdFromRequest,
   checkUsageLimit,
+  logUsage,
 } from "@/lib/usage-checker";
 import {
   assertCostGuard,
   assertRateLimit,
   getAnalyzeRateLimit,
+  recordEstimatedCost,
 } from "@/lib/security-guard";
 
 export const runtime = "nodejs";
@@ -115,9 +117,18 @@ export async function POST(req: Request) {
       );
     }
 
+    const publicUserId = usage.publicUserId ?? userId;
+    await logUsage(publicUserId, "ANALYZE");
+    await recordEstimatedCost("ANALYZE");
+
     return NextResponse.json({
       success: true,
       transcript,
+      usage: {
+        used: usage.used + 1,
+        limit: usage.limit,
+        remaining: Math.max(usage.limit - (usage.used + 1), 0),
+      },
     });
   } catch (error: unknown) {
     const err = error as Error;

@@ -2,24 +2,30 @@
 import { prisma } from './prisma'
 import { Plan, UsageAction } from '@prisma/client'
 
-export const PLAN_LIMITS = {
+export const PLAN_LIMITS: Record<Plan, Record<UsageAction, number>> = {
   FREE: {
     ANALYZE: 3,
     GENERATE_SCRIPT: 3,
     GENERATE_TITLES: 3,
     GENERATE_IDEAS: 3,
   },
-  CREATOR: {                    // 對應你的基本版 NT$499
-    ANALYZE: 80,
-    GENERATE_SCRIPT: 80,
-    GENERATE_TITLES: 80,
-    GENERATE_IDEAS: 80,
+  CREATOR: {
+    ANALYZE: 50,
+    GENERATE_SCRIPT: 50,
+    GENERATE_TITLES: 50,
+    GENERATE_IDEAS: 50,
   },
-  PRO: {                        // 對應你的加量版 NT$999
-    ANALYZE: 250,
-    GENERATE_SCRIPT: 250,
-    GENERATE_TITLES: 250,
-    GENERATE_IDEAS: 250,
+  PRO: {
+    ANALYZE: 200,
+    GENERATE_SCRIPT: 200,
+    GENERATE_TITLES: 200,
+    GENERATE_IDEAS: 200,
+  },
+  FLAGSHIP: {
+    ANALYZE: 500,
+    GENERATE_SCRIPT: 500,
+    GENERATE_TITLES: 500,
+    GENERATE_IDEAS: 500,
   },
 }
 

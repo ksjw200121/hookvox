@@ -1,5 +1,8 @@
 import { NextResponse } from "next/server";
-import { getUserIdFromRequest, ensurePublicUserBySupabaseId } from "@/lib/usage-checker";
+import {
+  getBillingAccessSnapshot,
+  getUserIdFromRequest,
+} from "@/lib/usage-checker";
 import { prisma } from "@/lib/prisma";
 
 export const runtime = "nodejs";
@@ -19,13 +22,6 @@ const CYCLE_LABELS: Record<string, string> = {
   annual: "年繳",
 };
 
-const PLAN_LEVEL: Record<string, number> = {
-  FREE: 0,
-  CREATOR: 1,
-  PRO: 2,
-  FLAGSHIP: 3,
-};
-
 type OrderRow = {
   id: string;
   plan: string;
@@ -37,21 +33,6 @@ type OrderRow = {
   merchantTradeNo: string | null;
 };
 
-function getCycleMonths(cycle: string) {
-  const c = String(cycle || "").trim();
-  if (c === "monthly") return 1;
-  if (c === "quarterly") return 3;
-  if (c === "biannual") return 6;
-  if (c === "annual") return 12;
-  return 1;
-}
-
-function addMonths(base: Date, months: number) {
-  const d = new Date(base);
-  d.setMonth(d.getMonth() + months);
-  return d;
-}
-
 export async function GET(req: Request) {
   try {
     const supabaseId = await getUserIdFromRequest(req);
@@ -60,27 +41,15 @@ export async function GET(req: Request) {
       return NextResponse.json({ error: "未登入" }, { status: 401 });
     }
 
-    // 新註冊用戶可能尚未有 public.users 列，先同步建立
-    const publicUser = await ensurePublicUserBySupabaseId(supabaseId);
-    if (!publicUser?.id) {
+    const access = await getBillingAccessSnapshot(supabaseId);
+    if (!access.internalUserId) {
       return NextResponse.json(
         { error: "找不到使用者資料" },
         { status: 400 }
       );
     }
 
-    const [subscription, orders] = await Promise.all([
-      prisma.subscription.findUnique({
-        where: { userId: publicUser.id },
-        select: {
-          id: true,
-          plan: true,
-          status: true,
-          startDate: true,
-          endDate: true,
-        },
-      }),
-      prisma.$queryRaw<OrderRow[]>`
+    const orders = await prisma.$queryRaw<OrderRow[]>`
         SELECT
           id,
           plan,
@@ -91,91 +60,19 @@ export async function GET(req: Request) {
           "paidAt" as "paidAt",
           "merchantTradeNo" as "merchantTradeNo"
         FROM orders
-        WHERE "userId" = ${publicUser.id}
+        WHERE "userId" = ${access.internalUserId}
         ORDER BY "createdAt" DESC
         LIMIT 50
-      `,
-    ]);
-
-    let plan = "FREE";
-    let status = "FREE";
-    let startDate: string | null = null;
-    let endDate: string | null = null;
-    let billingCycle: string | null = null;
-
-    // 1) Prefer subscriptions table if it indicates a paid plan and is not expired
-    if (subscription) {
-      plan = String(subscription.plan || "FREE").trim().toUpperCase();
-      status = String(subscription.status || "").trim().toUpperCase();
-      startDate = subscription.startDate?.toISOString() ?? null;
-      endDate = subscription.endDate?.toISOString() ?? null;
-      if (endDate && new Date(endDate) <= new Date()) {
-        status = "EXPIRED";
-      }
-    }
-
-    const isPaidPlan =
-      plan === "CREATOR" || plan === "PRO" || plan === "FLAGSHIP";
-    const isExplicitlyInactive = status === "EXPIRED" || status === "CANCELLED";
-
-    // 2) Prefer latest PAID/SUCCESS order when it is higher than subscription (upgrade case),
-    // or when subscription is missing/invalid.
-    const latestPaid = (orders || []).find((o) =>
-      ["PAID", "SUCCESS"].includes(String(o?.status || "").toUpperCase())
-    );
-    const latestPaidPlan = String(latestPaid?.plan || "FREE").trim().toUpperCase();
-    const isLatestPaidPlan =
-      latestPaidPlan === "CREATOR" || latestPaidPlan === "PRO" || latestPaidPlan === "FLAGSHIP";
-
-    const shouldUsePaidOrder =
-      Boolean(latestPaid && isLatestPaidPlan) &&
-      ((!isPaidPlan || isExplicitlyInactive) ||
-        PLAN_LEVEL[latestPaidPlan] > (PLAN_LEVEL[plan] ?? 0));
-
-    if (shouldUsePaidOrder) {
-      plan = latestPaidPlan;
-      status = "ACTIVE";
-      billingCycle = String(latestPaid?.billingCycle || "monthly");
-      const anchorIso = latestPaid?.paidAt || latestPaid?.createdAt || null;
-      const cycle = String(latestPaid?.billingCycle || "monthly");
-      const months = getCycleMonths(cycle);
-      if (anchorIso) {
-        const anchor = new Date(anchorIso);
-        if (!Number.isNaN(anchor.getTime())) {
-          startDate = anchor.toISOString();
-          endDate = addMonths(anchor, months).toISOString();
-        }
-      }
-
-      // best-effort: self-heal subscription row to avoid future mismatches
-      const nowIso = new Date();
-      await prisma.subscription.upsert({
-        where: { userId: publicUser.id },
-        update: {
-          plan: plan as any,
-          status: "ACTIVE" as any,
-          startDate: startDate ? new Date(startDate) : nowIso,
-          endDate: endDate ? new Date(endDate) : null,
-          updatedAt: nowIso,
-        },
-        create: {
-          userId: publicUser.id,
-          plan: plan as any,
-          status: "ACTIVE" as any,
-          startDate: startDate ? new Date(startDate) : nowIso,
-          endDate: endDate ? new Date(endDate) : null,
-        },
-      });
-    }
+      `;
 
     return NextResponse.json({
       subscription: {
-        plan,
-        planLabel: PLAN_LABELS[plan] || plan,
-        billingCycle,
-        status,
-        startDate,
-        endDate,
+        plan: access.plan,
+        planLabel: PLAN_LABELS[access.plan] || access.plan,
+        billingCycle: access.billingCycle,
+        status: access.status,
+        startDate: access.startDate,
+        endDate: access.endDate,
       },
       orders: (orders || []).map((o) => ({
         id: o.id,

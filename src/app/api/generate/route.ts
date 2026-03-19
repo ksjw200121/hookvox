@@ -301,17 +301,6 @@ export async function POST(req: Request) {
       );
     }
 
-    const costGuard = await assertCostGuard("GENERATE_SCRIPT");
-    if (!costGuard.allowed) {
-      return NextResponse.json(
-        {
-          error: "系統今日 AI 成本保護已啟動，請稍後再試",
-          code: costGuard.message,
-        },
-        { status: 503 }
-      );
-    }
-
     const body = await req.json();
     const {
       url,
@@ -349,6 +338,37 @@ export async function POST(req: Request) {
 
     const cachedGenerated = getGeneratedPayload(existingAnalysis);
 
+    if (
+      cachedGenerated.titles.length > 0 &&
+      cachedGenerated.scripts.length > 0
+    ) {
+      const cachedUsage = await checkUsageLimit(userId, "GENERATE");
+      return NextResponse.json({
+        success: true,
+        cached: true,
+        titles: cachedGenerated.titles,
+        bestScriptVersion: cachedGenerated.bestScriptVersion,
+        scripts: cachedGenerated.scripts,
+        storyboard: cachedGenerated.storyboard,
+        adaptedVersion: cachedGenerated.adaptedVersion,
+        usage: {
+          used: cachedUsage.used,
+          limit: cachedUsage.limit,
+          remaining: cachedUsage.remaining,
+        },
+      });
+    }
+
+    const costGuard = await assertCostGuard("GENERATE_SCRIPT");
+    if (!costGuard.allowed) {
+      return NextResponse.json(
+        {
+          error: "系統今日 AI 成本保護已啟動，請稍後再試",
+          code: costGuard.message,
+        },
+        { status: 503 }
+      );
+    }
     const usage = await checkUsageLimit(userId, "GENERATE");
 
     if (!usage.allowed) {
@@ -366,26 +386,6 @@ export async function POST(req: Request) {
     }
 
     const publicUserId = usage.publicUserId ?? userId;
-
-    if (
-      cachedGenerated.titles.length > 0 &&
-      cachedGenerated.scripts.length > 0
-    ) {
-      return NextResponse.json({
-        success: true,
-        cached: true,
-        titles: cachedGenerated.titles,
-        bestScriptVersion: cachedGenerated.bestScriptVersion,
-        scripts: cachedGenerated.scripts,
-        storyboard: cachedGenerated.storyboard,
-        adaptedVersion: cachedGenerated.adaptedVersion,
-        usage: {
-          used: usage.used,
-          limit: usage.limit,
-          remaining: usage.remaining,
-        },
-      });
-    }
     const finalTopic = userTopic || substitution || topic || "";
     const storyboardRequired = Boolean(wantStoryboard);
 

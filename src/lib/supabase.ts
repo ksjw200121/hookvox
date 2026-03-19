@@ -13,7 +13,7 @@ function safeFetch(input: RequestInfo | URL, init?: RequestInit): Promise<Respon
     headers = new Headers()
     raw.forEach((value, key) => headers.set(key, toLatin1(value)))
   } else if (Array.isArray(raw)) {
-    headers = new Headers(raw.map(([k, v]) => [k, toLatin1(String(v))]))
+    headers = new Headers(raw.map(([k, v]) => [k, toLatin1(String(v))] as [string, string]))
   } else {
     const obj: Record<string, string> = {}
     for (const k of Object.keys(raw)) obj[k] = toLatin1(String((raw as Record<string, string>)[k]))
@@ -45,6 +45,7 @@ function getClient(): SupabaseClient {
 
 export const supabase = new Proxy({} as SupabaseClient, {
   get(_, prop) {
-    return (getClient() as Record<string, unknown>)[prop as string]
+    const client = getClient()
+    return (client as unknown as Record<PropertyKey, unknown>)[prop]
   },
 })

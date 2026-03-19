@@ -1,6 +1,63 @@
 import Link from "next/link";
 
+type PricingCard = {
+  name: string;
+  price: string;
+  period: string;
+  tag: string;
+  features: string[];
+  cta: string;
+  highlight: boolean;
+  earlybird?: boolean;
+  originalPrice?: string;
+};
+
 export default function HomePage() {
+  const pricingCards: PricingCard[] = [
+    {
+      name: "免費試用",
+      price: "NT$0",
+      period: "",
+      tag: "",
+      features: [
+        "3 次分析 + 3 次生成",
+        "完整功能試用",
+        "腳本 + 標題 + 分鏡",
+        "不需信用卡",
+      ],
+      cta: "免費開始",
+      highlight: false,
+    },
+    {
+      name: "Creator",
+      price: "NT$699",
+      period: "/月",
+      tag: "最多人選",
+      features: [
+        "50 次分析 + 50 次生成 / 週期",
+        "腳本 + 標題 + 分鏡",
+        "爆款資料庫",
+        "每支影片可生成 1 個延伸腳本",
+      ],
+      cta: "立即升級",
+      highlight: true,
+    },
+    {
+      name: "專業版",
+      price: "NT$1,599",
+      period: "/月",
+      tag: "重度使用者",
+      features: [
+        "200 次分析 + 200 次生成 / 週期",
+        "腳本 + 標題 + 分鏡",
+        "爆款資料庫",
+        "每支影片可生成 3 個延伸腳本、一鍵複製標題",
+      ],
+      cta: "升級專業版",
+      highlight: false,
+    },
+  ];
+
   return (
     <div className="min-h-screen bg-dark-900 overflow-hidden">
       <nav className="fixed top-0 w-full z-50 border-b border-white/5 bg-dark-900/80 backdrop-blur-xl">
@@ -248,50 +305,7 @@ export default function HomePage() {
           </p>
 
           <div className="grid md:grid-cols-3 gap-6">
-            {[
-              {
-                name: "免費試用",
-                price: "NT$0",
-                period: "",
-                tag: "",
-                features: [
-                  "3 次分析 + 3 次生成",
-                  "完整功能試用",
-                  "腳本 + 標題 + 分鏡",
-                  "不需信用卡",
-                ],
-                cta: "免費開始",
-                highlight: false,
-              },
-              {
-                name: "Creator",
-                price: "NT$699",
-                period: "/月",
-                tag: "最多人選",
-                features: [
-                  "50 次分析 + 50 次生成 / 週期",
-                  "腳本 + 標題 + 分鏡",
-                  "爆款資料庫",
-                  "每支影片可生成 1 個延伸腳本",
-                ],
-                cta: "立即升級",
-                highlight: true,
-              },
-              {
-                name: "專業版",
-                price: "NT$1,599",
-                period: "/月",
-                tag: "重度使用者",
-                features: [
-                  "200 次分析 + 200 次生成 / 週期",
-                  "腳本 + 標題 + 分鏡",
-                  "爆款資料庫",
-                  "每支影片可生成 3 個延伸腳本、一鍵複製標題",
-                ],
-                cta: "升級專業版",
-                highlight: false,
-              },
-            ].map((p) => (
+            {pricingCards.map((p) => (
               <div
                 key={p.name}
                 className={`rounded-2xl p-8 relative ${

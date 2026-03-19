@@ -143,7 +143,9 @@ export async function GET(req: Request) {
   try {
     const { searchParams } = new URL(req.url);
     const body: Record<string, string> = {};
-    for (const [k, v] of searchParams.entries()) body[k] = v;
+    searchParams.forEach((value, key) => {
+      body[key] = value;
+    });
     await tryProcessEcpayResult(body, "ORDER_RESULT_URL_GET");
   } catch {
     // ignore

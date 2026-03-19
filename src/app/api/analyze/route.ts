@@ -2,6 +2,7 @@ import { isAiEnabled } from "@/lib/ai-switch";
 import { NextResponse } from "next/server";
 import OpenAI from "openai";
 import Anthropic from "@anthropic-ai/sdk";
+import { Prisma } from "@prisma/client";
 import { toFile } from "openai/uploads";
 import {
   getUserIdFromRequest,
@@ -222,14 +223,6 @@ export async function POST(req: Request) {
       );
     }
 
-    const costGuard = await assertCostGuard("ANALYZE");
-    if (!costGuard.allowed) {
-      return NextResponse.json(
-        { error: "系統今日 AI 成本保護已啟動，請稍後再試", code: costGuard.message },
-        { status: 503 }
-      );
-    }
-
     const body = await req.json();
 
     let transcript = String(body?.transcript || "").trim();
@@ -256,23 +249,6 @@ export async function POST(req: Request) {
         );
       }
     }
-
-    const usage = await checkUsageLimit(userId, "ANALYZE");
-    if (!usage.allowed) {
-      return NextResponse.json(
-        {
-          error: `本月分析次數已達上限 ${usage.limit} 次，已使用 ${usage.used} 次，請升級方案繼續使用`,
-          limitReached: true,
-          upgradeRequired: true,
-          used: usage.used,
-          limit: usage.limit,
-          remaining: usage.remaining,
-        },
-        { status: 403 }
-      );
-    }
-
-    const publicUserId = usage.publicUserId ?? userId;
 
     if (url) {
       const existing = await prisma.viralDatabase.findFirst({
@@ -306,9 +282,11 @@ export async function POST(req: Request) {
         if (JSON.stringify(normalizedExisting) !== JSON.stringify(existingAnalysis)) {
           await prisma.viralDatabase.update({
             where: { id: existing.id },
-            data: { analysis: normalizedExisting },
+            data: { analysis: normalizedExisting as Prisma.InputJsonValue },
           });
         }
+
+        const cachedUsage = await checkUsageLimit(userId, "ANALYZE");
 
         return NextResponse.json({
           success: true,
@@ -316,14 +294,39 @@ export async function POST(req: Request) {
           transcript: existing.transcript || "",
           analysis: normalizedExisting,
           usage: {
-            used: usage.used,
-            limit: usage.limit,
-            remaining: usage.remaining,
+            used: cachedUsage.used,
+            limit: cachedUsage.limit,
+            remaining: cachedUsage.remaining,
           },
           message: "這支影片你已經分析過，已直接讀取資料庫內容，未重複扣次數",
         });
       }
     }
+
+    const costGuard = await assertCostGuard("ANALYZE");
+    if (!costGuard.allowed) {
+      return NextResponse.json(
+        { error: "系統今日 AI 成本保護已啟動，請稍後再試", code: costGuard.message },
+        { status: 503 }
+      );
+    }
+
+    const usage = await checkUsageLimit(userId, "ANALYZE");
+    if (!usage.allowed) {
+      return NextResponse.json(
+        {
+          error: `本月分析次數已達上限 ${usage.limit} 次，已使用 ${usage.used} 次，請升級方案繼續使用`,
+          limitReached: true,
+          upgradeRequired: true,
+          used: usage.used,
+          limit: usage.limit,
+          remaining: usage.remaining,
+        },
+        { status: 403 }
+      );
+    }
+
+    const publicUserId = usage.publicUserId ?? userId;
 
     if (!transcript) {
       if (url) {
@@ -529,7 +532,7 @@ export async function POST(req: Request) {
         userId: publicUserId,
         videoUrl: url || `manual-${Date.now()}`,
         transcript,
-        analysis: normalizedAnalysis,
+        analysis: normalizedAnalysis as Prisma.InputJsonValue,
       },
     });
 
