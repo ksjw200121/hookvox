@@ -23,6 +23,48 @@ import {
   cleanupDownloadedVideo,
 } from "@/lib/video-downloader";
 import { createClient } from "@supabase/supabase-js";
+import { execFile } from "child_process";
+import { writeFile, readFile, unlink } from "fs/promises";
+import { tmpdir } from "os";
+import { join } from "path";
+
+/**
+ * 用 ffmpeg-static 把 .mov / HEVC 等格式轉成 Whisper 可接受的 .mp3
+ * 只抽音軌，不處理影像，速度快且檔案小。
+ */
+async function convertToMp3(inputBuffer: Buffer): Promise<Buffer> {
+  // eslint-disable-next-line @typescript-eslint/no-require-imports
+  const ffmpegPath: string = require("ffmpeg-static");
+  const id = Date.now() + "_" + Math.random().toString(36).slice(2, 8);
+  const inputPath = join(tmpdir(), `input_${id}.mov`);
+  const outputPath = join(tmpdir(), `output_${id}.mp3`);
+
+  await writeFile(inputPath, inputBuffer);
+
+  return new Promise((resolve, reject) => {
+    execFile(
+      ffmpegPath,
+      ["-i", inputPath, "-vn", "-acodec", "libmp3lame", "-q:a", "4", "-y", outputPath],
+      { timeout: 120_000 },
+      async (err) => {
+        // 清理 input 檔（不管成功失敗）
+        unlink(inputPath).catch(() => {});
+        if (err) {
+          unlink(outputPath).catch(() => {});
+          reject(new Error(`ffmpeg 轉檔失敗: ${err.message}`));
+          return;
+        }
+        try {
+          const mp3Buffer = await readFile(outputPath);
+          unlink(outputPath).catch(() => {});
+          resolve(mp3Buffer);
+        } catch (readErr) {
+          reject(new Error(`讀取轉檔結果失敗: ${(readErr as Error).message}`));
+        }
+      }
+    );
+  });
+}
 
 export const runtime = "nodejs";
 
@@ -397,7 +439,7 @@ export async function POST(req: Request) {
           );
         }
 
-        const buffer = Buffer.from(await blob.arrayBuffer());
+        let buffer: Buffer = Buffer.from(await blob.arrayBuffer()) as Buffer;
         const filename = storagePath.replace(/\\/g, "/").split("/").pop() || "";
         const ext = (filename && filename.includes(".")) ? filename.split(".").pop()!.toLowerCase() : "mp4";
         const knownUnsupported = ["avi", "mkv", "wmv"];
@@ -407,9 +449,26 @@ export async function POST(req: Request) {
             { status: 400 }
           );
         }
-        // .mov (iPhone 影片) 本質與 .mp4 相同編碼，Whisper 不認副檔名但可正常處理
-        const safeExt = ext === "mov" ? "mp4" : (isWhisperSupportedExt(ext) ? ext : "mp4");
-        const mimeType = safeExt === "mp3" || safeExt === "m4a" ? "audio/mpeg" : "video/mp4";
+
+        // .mov / HEVC 等 Whisper 不直接支援的格式，用 ffmpeg 抽音軌轉 mp3
+        let safeExt: string;
+        let mimeType: string;
+        const needsConversion = ext === "mov" || ext === "hevc" || !isWhisperSupportedExt(ext);
+        if (needsConversion) {
+          try {
+            buffer = await convertToMp3(buffer);
+            safeExt = "mp3";
+            mimeType = "audio/mpeg";
+          } catch (convErr) {
+            console.error("ffmpeg conversion failed:", convErr);
+            // 轉檔失敗就用原始檔案試試（fallback）
+            safeExt = isWhisperSupportedExt(ext) ? ext : "mp4";
+            mimeType = "video/mp4";
+          }
+        } else {
+          safeExt = ext;
+          mimeType = safeExt === "mp3" || safeExt === "m4a" ? "audio/mpeg" : "video/mp4";
+        }
         const uploadedFile = await toFile(buffer, `input.${safeExt}`, { type: mimeType });
 
         let transcription: { text?: string | null };

@@ -14,10 +14,50 @@ import {
   getAnalyzeRateLimit,
   recordEstimatedCost,
 } from "@/lib/security-guard";
+import { execFile } from "child_process";
+import { writeFile, readFile, unlink } from "fs/promises";
+import { tmpdir } from "os";
+import { join } from "path";
 
 export const runtime = "nodejs";
 
 const openai = new OpenAI({ apiKey: process.env.OPENAI_API_KEY });
+
+/**
+ * 用 ffmpeg-static 將 .mov/HEVC 轉成 .mp3（只抽音軌）
+ */
+async function convertToMp3(inputBuffer: Buffer): Promise<Buffer> {
+  // eslint-disable-next-line @typescript-eslint/no-require-imports
+  const ffmpegPath: string = require("ffmpeg-static");
+  const id = Date.now() + "_" + Math.random().toString(36).slice(2, 8);
+  const inputPath = join(tmpdir(), `tr_in_${id}.mov`);
+  const outputPath = join(tmpdir(), `tr_out_${id}.mp3`);
+
+  await writeFile(inputPath, inputBuffer);
+
+  return new Promise((resolve, reject) => {
+    execFile(
+      ffmpegPath,
+      ["-i", inputPath, "-vn", "-acodec", "libmp3lame", "-q:a", "4", "-y", outputPath],
+      { timeout: 120_000 },
+      async (err) => {
+        unlink(inputPath).catch(() => {});
+        if (err) {
+          unlink(outputPath).catch(() => {});
+          reject(new Error(`ffmpeg 轉檔失敗: ${err.message}`));
+          return;
+        }
+        try {
+          const mp3Buffer = await readFile(outputPath);
+          unlink(outputPath).catch(() => {});
+          resolve(mp3Buffer);
+        } catch (readErr) {
+          reject(new Error(`讀取轉檔結果失敗: ${(readErr as Error).message}`));
+        }
+      }
+    );
+  });
+}
 
 const ALLOWED_TYPES = [
   "audio/mpeg",
@@ -111,13 +151,23 @@ export async function POST(req: Request) {
       );
     }
 
-    const buffer = Buffer.from(await file.arrayBuffer());
-    // .mov (iPhone 影片) 與 .mp4 編碼相同，Whisper 不認 .mov 副檔名，改名為 .mp4 即可
+    let buffer: Buffer = Buffer.from(await file.arrayBuffer()) as Buffer;
     let safeName = file.name || "input.mp4";
     let safeType = file.type || "video/mp4";
-    if (safeName.toLowerCase().endsWith(".mov") || safeType === "video/quicktime") {
-      safeName = safeName.replace(/\.mov$/i, ".mp4");
-      safeType = "video/mp4";
+
+    // .mov / HEVC (iPhone 影片) 需要用 ffmpeg 轉成 mp3 才能送 Whisper
+    const isMov = safeName.toLowerCase().endsWith(".mov") || safeType === "video/quicktime";
+    if (isMov) {
+      try {
+        buffer = await convertToMp3(buffer);
+        safeName = "input.mp3";
+        safeType = "audio/mpeg";
+      } catch (convErr) {
+        console.error("ffmpeg conversion failed in transcribe:", convErr);
+        // fallback: 試試直接改名送
+        safeName = safeName.replace(/\.mov$/i, ".mp4");
+        safeType = "video/mp4";
+      }
     }
     const uploadedFile = await toFile(buffer, safeName, { type: safeType });
 
