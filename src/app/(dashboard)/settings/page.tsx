@@ -86,7 +86,7 @@ export default function SettingsPage() {
     loadProfile();
   }, []);
 
-  async function saveInstagram() {
+  async function saveProfile() {
     try {
       setSaving(true);
       setMessage("");
@@ -110,6 +110,7 @@ export default function SettingsPage() {
           Authorization: `Bearer ${token}`,
         },
         body: JSON.stringify({
+          name: name.trim(),
           instagramHandle: normalizedHandle,
           skipped: !normalizedHandle,
         }),
@@ -117,14 +118,15 @@ export default function SettingsPage() {
 
       const json = await res.json();
       if (!res.ok) {
-        setError(json?.error || "儲存 IG 失敗");
+        setError(json?.error || "儲存失敗");
         return;
       }
 
+      if (json?.user?.name !== undefined) setName(String(json.user.name || ""));
       setInstagramHandle(String(json?.user?.instagramHandle || ""));
-      setMessage("已更新 IG 帳號");
+      setMessage("已更新個人資料");
     } catch (err: any) {
-      setError(err?.message || "儲存 IG 失敗");
+      setError(err?.message || "儲存失敗");
     } finally {
       setSaving(false);
     }
@@ -220,7 +222,7 @@ export default function SettingsPage() {
       <div>
         <h1 className="text-3xl font-black mb-2">個人設定</h1>
         <p className="text-white/45">
-          你可以在這裡維護帳號基本資料，目前可修改 IG 帳號供客服快速協助。
+          你可以在這裡維護帳號基本資料。名稱和 IG 帳號都可以修改。
         </p>
       </div>
 
@@ -241,9 +243,10 @@ export default function SettingsPage() {
               <div>
                 <div className="text-sm text-white/45 mb-2">名稱</div>
                 <input
-                  value={name || "未設定"}
-                  disabled
-                  className="w-full rounded-xl border border-white/10 bg-white/5 px-4 py-3 text-sm text-white/70"
+                  value={name}
+                  onChange={(e) => setName(e.target.value)}
+                  placeholder="輸入你的名稱"
+                  className="w-full rounded-xl border border-white/10 bg-white/5 px-4 py-3 text-sm outline-none"
                 />
               </div>
             </div>
@@ -267,7 +270,7 @@ export default function SettingsPage() {
             <div className="flex items-center gap-3">
               <button
                 type="button"
-                onClick={saveInstagram}
+                onClick={saveProfile}
                 disabled={saving}
                 className="rounded-xl bg-red-500 hover:bg-red-600 px-4 py-2 text-sm font-semibold disabled:opacity-50"
               >

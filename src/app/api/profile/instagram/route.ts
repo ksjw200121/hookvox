@@ -24,19 +24,26 @@ export async function POST(req: Request) {
     const body = await req.json();
     const instagramHandle = normalizeInstagramHandle(String(body?.instagramHandle || ""));
     const skipped = Boolean(body?.skipped);
+    const nameInput = body?.name !== undefined ? String(body.name).trim() : undefined;
 
-    if (!instagramHandle && !skipped) {
+    if (!instagramHandle && !skipped && nameInput === undefined) {
       return NextResponse.json({ error: "請輸入 IG 帳號或選擇稍後再填" }, { status: 400 });
+    }
+
+    const updateData: Record<string, unknown> = {
+      instagramHandle: instagramHandle || null,
+    };
+    if (nameInput !== undefined) {
+      updateData.name = nameInput || null;
     }
 
     const updated = await prisma.user.update({
       where: { id: user.id },
-      data: {
-        instagramHandle: instagramHandle || null,
-      },
+      data: updateData,
       select: {
         id: true,
         supabaseId: true,
+        name: true,
         instagramHandle: true,
       },
     });
