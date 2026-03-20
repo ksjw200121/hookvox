@@ -219,30 +219,24 @@ export default function GuidePage() {
 
             <StepCard num={2} title="選擇分析來源（三選一）">
               <MockUI>
-                <div className="flex gap-2 flex-wrap">
-                  <div className="relative">
+                <div className="space-y-4 pt-1">
+                  <div className="flex items-center gap-3">
+                    <Arrow label="方式 A" dir="right" />
                     <span className="px-4 py-2 rounded-lg bg-red-500/20 border border-red-500/40 text-red-300 text-sm font-bold">
                       上傳音訊 / 影片
                     </span>
-                    <div className="absolute -top-6 left-1/2 -translate-x-1/2">
-                      <Arrow label="方式 A" dir="down" />
-                    </div>
                   </div>
-                  <div className="relative">
+                  <div className="flex items-center gap-3">
+                    <Arrow label="方式 B" dir="right" />
                     <span className="px-4 py-2 rounded-lg bg-white/5 border border-white/10 text-white/60 text-sm">
                       貼逐字稿
                     </span>
-                    <div className="absolute -top-6 left-1/2 -translate-x-1/2">
-                      <Arrow label="方式 B" dir="down" />
-                    </div>
                   </div>
-                  <div className="relative">
+                  <div className="flex items-center gap-3">
+                    <Arrow label="方式 C" dir="right" />
                     <span className="px-4 py-2 rounded-lg bg-white/5 border border-white/10 text-white/60 text-sm">
                       YouTube Shorts 連結
                     </span>
-                    <div className="absolute -top-6 left-1/2 -translate-x-1/2">
-                      <Arrow label="方式 C" dir="down" />
-                    </div>
                   </div>
                 </div>
               </MockUI>
@@ -307,13 +301,15 @@ export default function GuidePage() {
             <StepCard num={5} title="按下「開始爆款分析」" tip="每次分析消耗 1 次分析額度。免費方案共 3 次。">
               <MockUI>
                 <div className="space-y-3">
-                  <div className="text-center">
-                    <Arrow label="按這裡開始分析" dir="down" />
-                  </div>
-                  <div className="flex gap-3 justify-center flex-wrap">
+                  <div className="flex items-center gap-3 justify-center flex-wrap">
+                    <Arrow label="先按這個分析" dir="right" />
                     <div className="px-6 py-3 rounded-lg bg-red-500 text-white font-bold text-sm">
                       開始爆款分析
                     </div>
+                  </div>
+                  <div className="flex items-center gap-3 justify-center flex-wrap">
+                    <span className="text-white/40 text-sm">分析完再按</span>
+                    <span className="text-white/30">→</span>
                     <div className="px-6 py-3 rounded-lg bg-blue-600 text-white font-bold text-sm">
                       ✨ 生成腳本和標題
                     </div>
@@ -377,9 +373,9 @@ export default function GuidePage() {
 
             <StepCard num={3} title="按「生成腳本和標題」" tip="每次生成消耗 1 次生成額度。免費方案共 3 次。">
               <MockUI>
-                <div className="text-center space-y-2">
-                  <Arrow label="按這裡生成" dir="down" />
-                  <div className="inline-block px-6 py-3 rounded-lg bg-blue-600 text-white font-bold text-sm">
+                <div className="flex items-center gap-3 justify-center flex-wrap">
+                  <Arrow label="按這裡生成腳本" dir="right" />
+                  <div className="px-6 py-3 rounded-lg bg-blue-600 text-white font-bold text-sm">
                     ✨ 生成腳本和標題
                   </div>
                 </div>
@@ -462,15 +458,23 @@ export default function GuidePage() {
 
             <StepCard num={3} title="使用每支影片的功能">
               <MockUI>
-                <div className="space-y-2 text-sm">
-                  <div className="flex items-center justify-between">
-                    <span className="text-white/50">分析時間：2026/3/20 下午12:37:29</span>
-                    <div className="flex gap-2">
+                <div className="space-y-3 text-sm">
+                  <div className="text-white/50">分析時間：2026/3/20 下午12:37:29</div>
+                  <div className="space-y-2">
+                    <div className="flex items-center gap-2">
+                      <Arrow label="" dir="right" />
                       <span className="text-red-400 text-xs underline">原影片連結 →</span>
-                      <Arrow label="匯出文字檔" dir="right" />
+                      <span className="text-white/40 text-xs">— 回去看原影片</span>
+                    </div>
+                    <div className="flex items-center gap-2">
+                      <Arrow label="" dir="right" />
                       <span className="px-2 py-1 rounded bg-white/10 text-white/70 text-xs">匯出 .txt</span>
-                      <Arrow label="收藏" dir="right" />
+                      <span className="text-white/40 text-xs">— 下載完整文字檔（Pro 以上）</span>
+                    </div>
+                    <div className="flex items-center gap-2">
+                      <Arrow label="" dir="right" />
                       <span className="px-2 py-1 rounded bg-white/10 text-white/70 text-xs">加入靈感簿</span>
+                      <span className="text-white/40 text-xs">— 收藏方便之後找</span>
                     </div>
                   </div>
                 </div>
