@@ -59,6 +59,26 @@ async function convertToMp3(inputBuffer: Buffer): Promise<Buffer> {
   });
 }
 
+function detectQuickTimeContainer(buf: Buffer): boolean {
+  const ftypIndex = buf.indexOf("ftyp");
+  if (ftypIndex >= 4 && ftypIndex + 8 <= buf.length) {
+    return buf.slice(ftypIndex + 4, ftypIndex + 8).toString("ascii") === "qt  ";
+  }
+  return false;
+}
+
+function patchQuickTimeFtyp(buf: Buffer): Buffer {
+  const ftypIndex = buf.indexOf("ftyp");
+  if (ftypIndex >= 4 && ftypIndex + 8 <= buf.length) {
+    if (buf.slice(ftypIndex + 4, ftypIndex + 8).toString("ascii") === "qt  ") {
+      const patched = Buffer.from(buf);
+      patched.write("isom", ftypIndex + 4, 4, "ascii");
+      return patched;
+    }
+  }
+  return buf;
+}
+
 const ALLOWED_TYPES = [
   "audio/mpeg",
   "audio/mp3",
@@ -164,7 +184,10 @@ export async function POST(req: Request) {
         safeType = "audio/mpeg";
       } catch (convErr) {
         console.error("ffmpeg conversion failed in transcribe:", convErr);
-        // fallback: 試試直接改名送
+        // fallback: ftyp 修補 + 改名
+        if (detectQuickTimeContainer(buffer)) {
+          buffer = patchQuickTimeFtyp(buffer);
+        }
         safeName = safeName.replace(/\.mov$/i, ".mp4");
         safeType = "video/mp4";
       }

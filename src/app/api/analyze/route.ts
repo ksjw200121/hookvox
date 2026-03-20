@@ -29,6 +29,36 @@ import { tmpdir } from "os";
 import { join } from "path";
 
 /**
+ * 檢測 buffer 是否為 QuickTime (.mov) 容器格式
+ * 檢查 ftyp box 的 major brand 是否為 "qt  "
+ */
+function detectQuickTimeContainer(buf: Buffer): boolean {
+  const ftypIndex = buf.indexOf("ftyp");
+  if (ftypIndex >= 4 && ftypIndex + 8 <= buf.length) {
+    const brand = buf.slice(ftypIndex + 4, ftypIndex + 8).toString("ascii");
+    return brand === "qt  ";
+  }
+  return false;
+}
+
+/**
+ * 輕量級修補：把 QuickTime 容器的 ftyp "qt  " 改成 "isom"
+ * 讓 Whisper 當作 MP4 來處理（同樣的音訊編碼）
+ */
+function patchQuickTimeFtyp(buf: Buffer): Buffer {
+  const ftypIndex = buf.indexOf("ftyp");
+  if (ftypIndex >= 4 && ftypIndex + 8 <= buf.length) {
+    const brand = buf.slice(ftypIndex + 4, ftypIndex + 8).toString("ascii");
+    if (brand === "qt  ") {
+      const patched = Buffer.from(buf);
+      patched.write("isom", ftypIndex + 4, 4, "ascii");
+      return patched;
+    }
+  }
+  return buf;
+}
+
+/**
  * 用 ffmpeg-static 把 .mov / HEVC 等格式轉成 Whisper 可接受的 .mp3
  * 只抽音軌，不處理影像，速度快且檔案小。
  */
@@ -461,7 +491,10 @@ export async function POST(req: Request) {
             mimeType = "audio/mpeg";
           } catch (convErr) {
             console.error("ffmpeg conversion failed:", convErr);
-            // 轉檔失敗就用原始檔案試試（fallback）
+            // fallback: 嘗試 ftyp 修補讓 Whisper 接受 QuickTime 容器
+            if (detectQuickTimeContainer(buffer)) {
+              buffer = patchQuickTimeFtyp(buffer);
+            }
             safeExt = isWhisperSupportedExt(ext) ? ext : "mp4";
             mimeType = "video/mp4";
           }
@@ -501,8 +534,6 @@ export async function POST(req: Request) {
         }
       } else if (body?.audioBase64 || body?.videoBase64) {
         const base64 = String(body.audioBase64 || body.videoBase64 || "");
-        const mimeType = body.audioBase64 ? "audio/mpeg" : "video/mp4";
-        const fileName = body.audioBase64 ? "audio.mp3" : "video.mp4";
         const normalizedBase64 = base64.replace(/^data:[^;]+;base64,/, "").trim();
         if (!normalizedBase64) {
           return NextResponse.json({ error: "檔案內容為空" }, { status: 400 });
@@ -513,14 +544,44 @@ export async function POST(req: Request) {
             { status: 400 }
           );
         }
-        const buffer = Buffer.from(normalizedBase64, "base64");
+        let buffer: Buffer = Buffer.from(normalizedBase64, "base64") as Buffer;
+        let fileName = body.audioBase64 ? "audio.mp3" : "video.mp4";
+        let mimeType = body.audioBase64 ? "audio/mpeg" : "video/mp4";
+
+        // 檢測是否為 QuickTime (.mov) 容器：ftyp box 的 major brand 為 "qt  "
+        const isQuickTime = detectQuickTimeContainer(buffer);
+        if (isQuickTime || body?.videoBase64) {
+          try {
+            buffer = await convertToMp3(buffer);
+            fileName = "audio.mp3";
+            mimeType = "audio/mpeg";
+          } catch (convErr) {
+            console.error("ffmpeg inline conversion failed:", convErr);
+            // fallback: 嘗試 ftyp 修補
+            if (isQuickTime) {
+              buffer = patchQuickTimeFtyp(buffer);
+            }
+          }
+        }
 
         const uploadedFile = await toFile(buffer, fileName, { type: mimeType });
 
-        const transcription = await openai.audio.transcriptions.create({
-          file: uploadedFile,
-          model: "whisper-1",
-        });
+        let transcription: { text?: string | null };
+        try {
+          transcription = await openai.audio.transcriptions.create({
+            file: uploadedFile,
+            model: "whisper-1",
+          });
+        } catch (whisperErr: unknown) {
+          const msg = (whisperErr as Error)?.message || "";
+          if (msg.includes("Invalid file format") || msg.includes("unsupported format")) {
+            return NextResponse.json(
+              { error: "此檔案無法轉錄，請確認是 mp3 / mp4 / mov / m4a / wav 等格式，且檔案未損壞。" },
+              { status: 400 }
+            );
+          }
+          throw whisperErr;
+        }
 
         transcript = transcription.text?.trim() || "";
 
