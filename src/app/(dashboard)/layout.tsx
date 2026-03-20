@@ -19,6 +19,7 @@ export default function DashboardLayout({
   // 預設為 null（未知），避免一開始就顯示「登入/註冊」按鈕
   const [authState, setAuthState] = useState<"unknown" | "guest" | "authed">("unknown");
   const [countdown, setCountdown] = useState<number | null>(null);
+  const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
   const idleTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const countdownIntervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
   const idleDeadlineRef = useRef<number>(Date.now() + IDLE_TIMEOUT_MS);
@@ -107,6 +108,11 @@ export default function DashboardLayout({
     };
   }, []);
 
+  // 路由切換時關閉手機選單
+  useEffect(() => {
+    setMobileMenuOpen(false);
+  }, [pathname]);
+
   const isGuest = authState === "guest";
   const isAuthed = authState === "authed";
   const showNav = isAuthed;
@@ -187,33 +193,85 @@ export default function DashboardLayout({
             ) : (
               <button
                 onClick={handleLogout}
-                className="rounded-lg bg-red-500 px-4 py-2 text-sm font-semibold text-white hover:bg-red-600"
+                className="hidden md:block rounded-lg bg-red-500 px-4 py-2 text-sm font-semibold text-white hover:bg-red-600"
               >
                 登出
+              </button>
+            )}
+
+            {/* 漢堡按鈕 (手機版) */}
+            {isAuthed && (
+              <button
+                onClick={() => setMobileMenuOpen((v) => !v)}
+                className="md:hidden flex flex-col justify-center items-center w-10 h-10 rounded-lg hover:bg-white/10 transition-colors"
+                aria-label="選單"
+              >
+                <span className={`block w-5 h-0.5 bg-white transition-all duration-300 ${mobileMenuOpen ? "rotate-45 translate-y-[3px]" : ""}`} />
+                <span className={`block w-5 h-0.5 bg-white mt-1 transition-all duration-300 ${mobileMenuOpen ? "opacity-0" : ""}`} />
+                <span className={`block w-5 h-0.5 bg-white mt-1 transition-all duration-300 ${mobileMenuOpen ? "-rotate-45 -translate-y-[7px]" : ""}`} />
               </button>
             )}
           </div>
         </div>
       </header>
-      {showNav ? (
-        <nav className="md:hidden flex gap-4 overflow-x-auto px-6 pb-3 text-sm text-white/70">
-          {navItems.map((item: any) => (
-            <Link
-              key={item.href}
-              href={item.href}
-              {...(item.external ? { target: "_blank", rel: "noopener noreferrer" } : {})}
-              className={`shrink-0 transition-colors ${
-                pathname === item.href ? "text-red-400" : "hover:text-white"
-              }`}
-            >
-              {item.label}
-            </Link>
-          ))}
-          <div className="shrink-0">
-            <AdminOnlyNavLink />
+      {/* 手機版側邊選單 */}
+      {isAuthed && (
+        <>
+          {/* 背景遮罩 */}
+          <div
+            className={`fixed inset-0 bg-black/60 z-40 md:hidden transition-opacity duration-300 ${
+              mobileMenuOpen ? "opacity-100 pointer-events-auto" : "opacity-0 pointer-events-none"
+            }`}
+            onClick={() => setMobileMenuOpen(false)}
+          />
+          {/* 選單面板 */}
+          <div
+            className={`fixed top-0 right-0 h-full w-64 bg-black border-l border-white/10 z-50 md:hidden transform transition-transform duration-300 ${
+              mobileMenuOpen ? "translate-x-0" : "translate-x-full"
+            }`}
+          >
+            <div className="flex items-center justify-between px-6 py-4 border-b border-white/10">
+              <span className="text-lg font-bold">選單</span>
+              <button
+                onClick={() => setMobileMenuOpen(false)}
+                className="w-8 h-8 flex items-center justify-center rounded-lg hover:bg-white/10 transition-colors text-white/60"
+              >
+                ✕
+              </button>
+            </div>
+            <nav className="flex flex-col py-4">
+              {navItems.map((item: any) => {
+                const active = pathname === item.href;
+                return (
+                  <Link
+                    key={item.href}
+                    href={item.href}
+                    {...(item.external ? { target: "_blank", rel: "noopener noreferrer" } : {})}
+                    className={`px-6 py-3 text-sm font-medium transition-colors ${
+                      active
+                        ? "text-red-400 bg-red-500/10"
+                        : "text-white/70 hover:text-white hover:bg-white/5"
+                    }`}
+                  >
+                    {item.label}
+                  </Link>
+                );
+              })}
+              <div className="px-6 py-3">
+                <AdminOnlyNavLink />
+              </div>
+              <div className="border-t border-white/10 mt-4 pt-4 px-6">
+                <button
+                  onClick={handleLogout}
+                  className="w-full rounded-lg bg-red-500 px-4 py-2.5 text-sm font-semibold text-white hover:bg-red-600 transition-colors"
+                >
+                  登出
+                </button>
+              </div>
+            </nav>
           </div>
-        </nav>
-      ) : null}
+        </>
+      )}
 
       <main className="mx-auto max-w-7xl w-full px-6 py-8 flex-1">
         {children}

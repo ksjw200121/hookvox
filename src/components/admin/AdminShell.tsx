@@ -9,6 +9,7 @@ const ADMIN_NAV_ITEMS = [
   { href: "/admin/users", label: "使用者總覽" },
   { href: "/admin/revenue", label: "收入" },
   { href: "/admin/costs", label: "成本監控" },
+  { href: "/admin/messages", label: "留言" },
 ];
 
 export function AdminSectionCard({
