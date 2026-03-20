@@ -860,12 +860,9 @@ export default function AnalyzePage() {
                     目前轉錄服務單檔上限約 25MB，為了避免上傳後才失敗，建議先壓到 {MAX_UPLOAD_MB}MB 以下。
                     若你是手機原始影片（常見 HEVC / 1080p / 60fps），請先用剪映 / CapCut 輸出成 720p、30fps、mp4。
                   </div>
-                  <div style={{ marginTop: 8 }}>
-                    IG 影片若不是你自己的原檔，請只使用你已合法取得授權的版本；如果創作者關閉下載，請直接向對方索取原檔，不要繞過限制。
-                  </div>
                   <div style={{ marginTop: 10 }}>
                     <Link href="/guide#upload-files" style={{ color: "#93c5fd", textDecoration: "underline" }}>
-                      查看合法取得影片與壓縮教學
+                      查看壓縮影片教學
                     </Link>
                   </div>
                 </div>
