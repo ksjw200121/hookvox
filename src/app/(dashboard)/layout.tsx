@@ -1,11 +1,14 @@
 "use client";
 
 import Link from "next/link";
-import { useEffect, useState } from "react";
+import { useEffect, useState, useRef, useCallback } from "react";
 import { usePathname } from "next/navigation";
 import AdminOnlyNavLink from "@/components/admin/AdminOnlyNavLink";
 import InstagramOnboardingModal from "@/components/profile/InstagramOnboardingModal";
 import { supabase } from "@/lib/supabase";
+
+const IDLE_TIMEOUT_MS = 30 * 60 * 1000; // 30 分鐘
+const COUNTDOWN_START_MS = 60 * 1000; // 最後 60 秒顯示倒數
 
 export default function DashboardLayout({
   children,
@@ -13,17 +16,75 @@ export default function DashboardLayout({
   children: React.ReactNode;
 }) {
   const pathname = usePathname();
-  const [isGuest, setIsGuest] = useState(true);
-  const [checkingSession, setCheckingSession] = useState(true);
+  // 預設為 null（未知），避免一開始就顯示「登入/註冊」按鈕
+  const [authState, setAuthState] = useState<"unknown" | "guest" | "authed">("unknown");
+  const [countdown, setCountdown] = useState<number | null>(null);
+  const idleTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const countdownIntervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
+  const idleDeadlineRef = useRef<number>(Date.now() + IDLE_TIMEOUT_MS);
 
+  // ---------- 閒置自動登出 ----------
+  const clearIdleTimers = useCallback(() => {
+    if (idleTimerRef.current) clearTimeout(idleTimerRef.current);
+    if (countdownIntervalRef.current) clearInterval(countdownIntervalRef.current);
+    setCountdown(null);
+  }, []);
+
+  const handleLogout = useCallback(async () => {
+    clearIdleTimers();
+    await supabase.auth.signOut();
+    window.location.href = "/login";
+  }, [clearIdleTimers]);
+
+  const resetIdleTimer = useCallback(() => {
+    if (authState !== "authed") return;
+    clearIdleTimers();
+
+    idleDeadlineRef.current = Date.now() + IDLE_TIMEOUT_MS;
+
+    // 倒數最後 60 秒開始顯示
+    idleTimerRef.current = setTimeout(() => {
+      const end = Date.now() + COUNTDOWN_START_MS;
+      setCountdown(Math.ceil(COUNTDOWN_START_MS / 1000));
+
+      countdownIntervalRef.current = setInterval(() => {
+        const remaining = Math.ceil((end - Date.now()) / 1000);
+        if (remaining <= 0) {
+          handleLogout();
+        } else {
+          setCountdown(remaining);
+        }
+      }, 1000);
+    }, IDLE_TIMEOUT_MS - COUNTDOWN_START_MS);
+  }, [authState, clearIdleTimers, handleLogout]);
+
+  // 監聽使用者活動重置計時器
   useEffect(() => {
+    if (authState !== "authed") return;
+
+    const events = ["mousemove", "mousedown", "keydown", "touchstart", "scroll"];
+    const onActivity = () => resetIdleTimer();
+
+    events.forEach((e) => window.addEventListener(e, onActivity, { passive: true }));
+    resetIdleTimer();
+
+    return () => {
+      events.forEach((e) => window.removeEventListener(e, onActivity));
+      clearIdleTimers();
+    };
+  }, [authState, resetIdleTimer, clearIdleTimers]);
+
+  // ---------- Session 管理 ----------
+  useEffect(() => {
+    let mounted = true;
+
     async function loadSession() {
       const {
         data: { session },
       } = await supabase.auth.getSession();
-
-      setIsGuest(!session?.access_token);
-      setCheckingSession(false);
+      if (mounted) {
+        setAuthState(session?.access_token ? "authed" : "guest");
+      }
     }
 
     loadSession();
@@ -31,19 +92,24 @@ export default function DashboardLayout({
     const {
       data: { subscription },
     } = supabase.auth.onAuthStateChange((_event, session) => {
-      setIsGuest(!session?.access_token);
-      setCheckingSession(false);
+      if (!mounted) return;
+      if (_event === "SIGNED_OUT") {
+        setAuthState("guest");
+      } else if (session?.access_token) {
+        setAuthState("authed");
+      }
+      // 不在其他事件（如 TOKEN_REFRESHED）時切到 guest
     });
 
     return () => {
+      mounted = false;
       subscription.unsubscribe();
     };
   }, []);
 
-  const handleLogout = async () => {
-    await supabase.auth.signOut();
-    window.location.href = "/login";
-  };
+  const isGuest = authState === "guest";
+  const isAuthed = authState === "authed";
+  const showNav = isAuthed;
 
   const navItems = [
     { href: "/dashboard", label: "控制台" },
@@ -60,6 +126,19 @@ export default function DashboardLayout({
 
   return (
     <div className="min-h-screen bg-black text-white flex flex-col">
+      {/* 閒置倒數警告 */}
+      {countdown !== null && (
+        <div className="fixed top-0 left-0 right-0 z-50 bg-yellow-600 text-black text-center py-2 text-sm font-semibold">
+          ⚠️ 你已閒置過久，將在 {countdown} 秒後自動登出。
+          <button
+            onClick={resetIdleTimer}
+            className="ml-3 px-3 py-1 bg-black text-white rounded text-xs hover:bg-gray-800"
+          >
+            我還在
+          </button>
+        </div>
+      )}
+
       <header className="border-b border-white/10 bg-black/80 backdrop-blur sticky top-0 z-40">
         <div className="mx-auto flex max-w-7xl items-center justify-between px-6 py-4">
           <Link href="/dashboard" className="flex flex-col leading-tight">
@@ -88,7 +167,7 @@ export default function DashboardLayout({
           </nav>
 
           <div className="flex items-center gap-3">
-            {checkingSession ? null : isGuest ? (
+            {authState === "unknown" ? null : isGuest ? (
               <>
                 <Link
                   href={loginHref}
@@ -114,7 +193,7 @@ export default function DashboardLayout({
           </div>
         </div>
       </header>
-      {!checkingSession && !isGuest ? (
+      {showNav ? (
         <nav className="md:hidden flex gap-4 overflow-x-auto px-6 pb-3 text-sm text-white/70">
           {navItems.map((item) => (
             <Link
@@ -136,7 +215,7 @@ export default function DashboardLayout({
       <main className="mx-auto max-w-7xl w-full px-6 py-8 flex-1">
         {children}
       </main>
-      {!checkingSession && !isGuest ? <InstagramOnboardingModal /> : null}
+      {isAuthed ? <InstagramOnboardingModal /> : null}
 
       <footer className="border-t border-white/10 py-6 mt-auto">
         <div className="mx-auto max-w-7xl px-6 flex flex-col md:flex-row items-center justify-between gap-3 text-xs text-white/30">

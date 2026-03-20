@@ -1,22 +1,12 @@
-import { createMiddlewareClient } from "@supabase/auth-helpers-nextjs";
 import { NextResponse } from "next/server";
 import type { NextRequest } from "next/server";
 
-export async function middleware(request: NextRequest) {
-  const res = NextResponse.next();
-
-  // Refresh Supabase auth session on every navigation request.
-  // This keeps the auth cookie/token fresh and prevents mobile WebViews
-  // from holding stale tokens that cause intermittent 401 errors.
-  try {
-    const supabase = createMiddlewareClient({ req: request, res });
-    await supabase.auth.getSession();
-  } catch {
-    // Non-fatal: if session refresh fails, continue with existing token.
-    // The client-side authFetch retry will handle expired tokens.
-  }
-
-  return res;
+export async function middleware(_request: NextRequest) {
+  // 直接放行，不做 auth session refresh。
+  // 原先的 createMiddlewareClient + getSession() 會用 cookie 刷新 session，
+  // 但前端 Supabase client 用 localStorage 存 token，兩者衝突會導致登出。
+  // Auth refresh 由前端 authFetch 的 token retry 機制處理即可。
+  return NextResponse.next();
 }
 
 export const config = {
