@@ -293,6 +293,7 @@ export default function AnalyzePage() {
       "m4v",
       "wav",
       "mp4",
+      "mov",
       "webm",
       "ogg",
       "flac",
@@ -332,7 +333,7 @@ export default function AnalyzePage() {
       (hasMime && !isMediaMime && !hasExt);
 
     if (shouldReject) {
-      setUploadError("不支援的檔案格式，請上傳 mp3 / mp4 / m4a / wav / webm（勿用 .mov，請先轉成 mp4）");
+      setUploadError("不支援的檔案格式，請上傳 mp3 / mp4 / mov / m4a / wav / webm 等音訊或影片檔案。");
       setUploadFile(null);
       setUploadSuccess(false);
       return;

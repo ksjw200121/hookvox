@@ -112,7 +112,14 @@ export async function POST(req: Request) {
     }
 
     const buffer = Buffer.from(await file.arrayBuffer());
-    const uploadedFile = await toFile(buffer, file.name, { type: file.type });
+    // .mov (iPhone 影片) 與 .mp4 編碼相同，Whisper 不認 .mov 副檔名，改名為 .mp4 即可
+    let safeName = file.name || "input.mp4";
+    let safeType = file.type || "video/mp4";
+    if (safeName.toLowerCase().endsWith(".mov") || safeType === "video/quicktime") {
+      safeName = safeName.replace(/\.mov$/i, ".mp4");
+      safeType = "video/mp4";
+    }
+    const uploadedFile = await toFile(buffer, safeName, { type: safeType });
 
     const transcription = await openai.audio.transcriptions.create({
       file: uploadedFile,

@@ -400,14 +400,15 @@ export async function POST(req: Request) {
         const buffer = Buffer.from(await blob.arrayBuffer());
         const filename = storagePath.replace(/\\/g, "/").split("/").pop() || "";
         const ext = (filename && filename.includes(".")) ? filename.split(".").pop()!.toLowerCase() : "mp4";
-        const knownUnsupported = ["mov", "avi", "mkv", "wmv"];
+        const knownUnsupported = ["avi", "mkv", "wmv"];
         if (ext && knownUnsupported.includes(ext)) {
           return NextResponse.json(
             { error: `不支援的檔案格式 .${ext}，請先轉成 mp4 再上傳。` },
             { status: 400 }
           );
         }
-        const safeExt = isWhisperSupportedExt(ext) ? ext : "mp4";
+        // .mov (iPhone 影片) 本質與 .mp4 相同編碼，Whisper 不認副檔名但可正常處理
+        const safeExt = ext === "mov" ? "mp4" : (isWhisperSupportedExt(ext) ? ext : "mp4");
         const mimeType = safeExt === "mp3" || safeExt === "m4a" ? "audio/mpeg" : "video/mp4";
         const uploadedFile = await toFile(buffer, `input.${safeExt}`, { type: mimeType });
 
@@ -422,7 +423,7 @@ export async function POST(req: Request) {
           const msg = (whisperErr as Error)?.message || "";
           if (msg.includes("Invalid file format") || msg.includes("unsupported format")) {
             return NextResponse.json(
-              { error: "此檔案無法轉錄，請確認是 mp3 / mp4 / m4a / wav 等格式，且檔案未損壞。.mov 請先轉成 mp4。" },
+              { error: "此檔案無法轉錄，請確認是 mp3 / mp4 / mov / m4a / wav 等格式，且檔案未損壞。" },
               { status: 400 }
             );
           }
