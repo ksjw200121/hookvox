@@ -1,5 +1,16 @@
-# Hookvox
 User-agent: *
 Allow: /
+Allow: /guide
+Allow: /plans
+Allow: /terms
+Allow: /privacy
+Allow: /refund
+Disallow: /dashboard
+Disallow: /admin
+Disallow: /api/
+Disallow: /analyze
+Disallow: /billing
+Disallow: /settings
+Disallow: /viral-db
 
 Sitemap: https://hookvox-1yib.vercel.app/sitemap.xml

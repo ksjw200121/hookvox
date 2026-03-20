@@ -83,6 +83,8 @@ async function getAuthHeader(): Promise<Record<string, string>> {
   }
 }
 
+const PAYMENT_MAINTENANCE = process.env.NEXT_PUBLIC_PAYMENT_MAINTENANCE === 'true'
+
 export default function PlansPage() {
   const [currentPlan, setCurrentPlan] = useState('FREE')
   const [currentBillingCycle, setCurrentBillingCycle] = useState<BillingCycle | null>(null)
@@ -180,6 +182,11 @@ export default function PlansPage() {
   const handleUpgradeClick = (planKey: string) => {
     if (planKey === 'FREE') return
 
+    if (PAYMENT_MAINTENANCE) {
+      alert('金流系統維護中，暫時無法付款，請稍後再試')
+      return
+    }
+
     if (PLAN_LEVEL[planKey] <= PLAN_LEVEL[currentPlan]) {
       alert('無法購買低於或等於目前方案的訂閱')
       return
@@ -263,6 +270,12 @@ export default function PlansPage() {
         <h1 className="text-4xl font-black mb-3">選擇方案</h1>
         <p className="text-white/40">月繳、季繳、半年、年繳，怎麼划算怎麼選</p>
       </div>
+
+      {PAYMENT_MAINTENANCE && (
+        <div className="rounded-2xl border border-amber-500/30 bg-amber-500/10 p-4 text-sm text-amber-200 leading-relaxed text-center font-medium">
+          金流系統維護中，暫時無法付款。維護完成後將恢復正常，造成不便敬請見諒。
+        </div>
+      )}
 
       <div className="rounded-2xl border border-brand-500/20 bg-brand-500/10 p-4 text-sm text-white/70 leading-relaxed">
         <p className="font-medium text-white mb-1">訂閱規則說明</p>

@@ -270,19 +270,40 @@ export async function getUserIdFromRequest(
   const supabaseAdmin = getSupabaseAdmin();
   const { data, error } = await supabaseAdmin.auth.getUser(token);
 
+  let userId: string | null = null;
+
   if (error || !data?.user) {
     // Token 可能暫時失效（Supabase 偶發回傳錯誤），等一下重試一次
     if (error?.message?.includes("expired") || error?.status === 401) {
       await new Promise((r) => setTimeout(r, 200));
       const retry = await supabaseAdmin.auth.getUser(token);
       if (!retry.error && retry.data?.user) {
-        return retry.data.user.id;
+        userId = retry.data.user.id;
       }
     }
-    return null;
+    if (!userId) return null;
+  } else {
+    userId = data.user.id;
   }
 
-  return data.user.id;
+  // Check if account is suspended
+  const user = await prisma.user.findUnique({
+    where: { supabaseId: userId },
+    select: { accountStatus: true },
+  });
+
+  if (user?.accountStatus === "SUSPENDED") {
+    throw new AccountSuspendedError();
+  }
+
+  return userId;
+}
+
+export class AccountSuspendedError extends Error {
+  constructor() {
+    super("帳號已被停用");
+    this.name = "AccountSuspendedError";
+  }
 }
 
 async function getAuthUserFromSupabaseId(supabaseId: string) {

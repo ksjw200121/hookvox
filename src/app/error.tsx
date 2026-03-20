@@ -10,41 +10,26 @@ export default function Error({
   reset: () => void;
 }) {
   useEffect(() => {
-    // Log the actual error for debugging — never show raw details to user
     console.error("Page error:", error);
   }, [error]);
 
   return (
-    <div
-      style={{
-        minHeight: "100vh",
-        background: "#000",
-        color: "#fff",
-        padding: "40px",
-        fontFamily: "sans-serif",
-      }}
-    >
-      <h1 style={{ fontSize: 32, fontWeight: "bold", marginBottom: 16 }}>
-        發生錯誤
-      </h1>
-
-      <p style={{ marginBottom: 24, color: "#ccc" }}>
-        頁面載入時發生問題，請重新整理或稍後再試。
-      </p>
-
-      <button
-        onClick={() => reset()}
-        style={{
-          background: "#ef4444",
-          color: "#fff",
-          border: "none",
-          padding: "12px 20px",
-          borderRadius: 8,
-          cursor: "pointer",
-        }}
-      >
-        重新整理
-      </button>
+    <div className="min-h-screen bg-black text-white flex items-center justify-center px-6">
+      <div className="max-w-md text-center space-y-6">
+        <div className="text-6xl">⚠</div>
+        <h1 className="text-3xl font-black">發生錯誤</h1>
+        <p className="text-white/60 leading-relaxed">
+          頁面載入時發生問題，請重新整理或稍後再試。
+          <br />
+          若問題持續，請聯絡客服協助處理。
+        </p>
+        <button
+          onClick={() => reset()}
+          className="bg-red-500 hover:bg-red-600 text-white font-bold px-6 py-3 rounded-xl transition-colors"
+        >
+          重新整理
+        </button>
+      </div>
     </div>
   );
 }

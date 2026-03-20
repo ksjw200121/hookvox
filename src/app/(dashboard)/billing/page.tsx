@@ -46,6 +46,8 @@ type UsageState = {
   cycleEnd: string | null;
 };
 
+const PAYMENT_MAINTENANCE = process.env.NEXT_PUBLIC_PAYMENT_MAINTENANCE === 'true';
+
 export default function BillingPage() {
   const [subscription, setSubscription] = useState<SubscriptionState | null>(null);
   const [orders, setOrders] = useState<OrderRow[]>([]);
@@ -228,6 +230,10 @@ const isExpiringSoon =
 
   async function handleContinuePayment(order: OrderRow) {
     if (order.status !== "PENDING" || !order.merchantTradeNo) return;
+    if (PAYMENT_MAINTENANCE) {
+      setError("金流系統維護中，暫時無法付款，請稍後再試");
+      return;
+    }
     setContinuingId(order.id);
     setError("");
     try {
@@ -336,6 +342,12 @@ const isExpiringSoon =
           目前方案、計費週期與付款記錄。到期後會回到免費方案；若重新訂閱則開啟新週期。
         </p>
       </div>
+
+      {PAYMENT_MAINTENANCE && (
+        <div className="rounded-2xl border border-amber-500/30 bg-amber-500/10 p-4 text-sm text-amber-200 leading-relaxed text-center font-medium">
+          金流系統維護中，暫時無法付款。維護完成後將恢復正常，造成不便敬請見諒。
+        </div>
+      )}
 
       {error && (
         <div className="rounded-xl bg-red-500/10 border border-red-500/20 text-red-300 px-4 py-3 text-sm">

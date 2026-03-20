@@ -40,6 +40,7 @@ export default function AdminUsersPage() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
   const [items, setItems] = useState<UserListItem[]>([]);
+  const [suspendingId, setSuspendingId] = useState<string | null>(null);
   const [filters, setFilters] = useState({
     q: "",
     plan: "",
@@ -88,6 +89,44 @@ export default function AdminUsersPage() {
 
     load();
   }, [queryString, token, isAdmin]);
+
+  async function handleToggleSuspend(item: UserListItem) {
+    if (!token) return;
+    const isSuspended = item.accountStatus === "SUSPENDED";
+    const action = isSuspended ? "ACTIVATE" : "SUSPEND";
+    const confirmMsg = isSuspended
+      ? `確定要啟用 ${item.email || item.name || "此使用者"} 的帳號嗎？`
+      : `確定要停用 ${item.email || item.name || "此使用者"} 的帳號嗎？`;
+    if (!window.confirm(confirmMsg)) return;
+
+    setSuspendingId(item.supabaseId);
+    try {
+      const res = await fetch("/api/admin/suspend-user", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          Authorization: `Bearer ${token}`,
+        },
+        body: JSON.stringify({ supabaseId: item.supabaseId, action }),
+      });
+      const json = await res.json();
+      if (!res.ok) {
+        alert(json?.error || "操作失敗");
+        return;
+      }
+      setItems((prev) =>
+        prev.map((u) =>
+          u.supabaseId === item.supabaseId
+            ? { ...u, accountStatus: json.accountStatus }
+            : u
+        )
+      );
+    } catch {
+      alert("操作失敗，請稍後再試");
+    } finally {
+      setSuspendingId(null);
+    }
+  }
 
   return (
     <div className="space-y-6">
@@ -210,6 +249,7 @@ export default function AdminUsersPage() {
                   <th className="px-3 py-3">方案</th>
                   <th className="px-3 py-3">訂閱狀態</th>
                   <th className="px-3 py-3">帳號狀態</th>
+                  <th className="px-3 py-3">操作</th>
                   <th className="px-3 py-3">角色</th>
                   <th className="px-3 py-3">最近付款</th>
                   <th className="px-3 py-3">最近使用</th>
@@ -253,6 +293,24 @@ export default function AdminUsersPage() {
                       >
                         {item.accountStatus || "ACTIVE"}
                       </span>
+                    </td>
+                    <td className="px-3 py-4">
+                      <button
+                        type="button"
+                        onClick={() => handleToggleSuspend(item)}
+                        disabled={suspendingId === item.supabaseId}
+                        className={`rounded-lg px-3 py-1.5 text-xs font-semibold transition-colors disabled:opacity-50 ${
+                          item.accountStatus === "SUSPENDED"
+                            ? "bg-emerald-500/20 text-emerald-200 hover:bg-emerald-500/30"
+                            : "bg-red-500/20 text-red-200 hover:bg-red-500/30"
+                        }`}
+                      >
+                        {suspendingId === item.supabaseId
+                          ? "處理中..."
+                          : item.accountStatus === "SUSPENDED"
+                          ? "啟用"
+                          : "停用"}
+                      </button>
                     </td>
                     <td className="px-3 py-4 text-white/70">{item.role || "USER"}</td>
                     <td className="px-3 py-4 text-white/70">
