@@ -1,391 +1,696 @@
 "use client";
 
 import Link from "next/link";
-import { useMemo, useState } from "react";
+import { useState } from "react";
 
-// 使用 public 內的圖片（部署到 Vercel 時不會因為本機 assets/路徑不同而失敗）
-const step1Img = "/guide-steps/step1.png";
-const step2Img = "/guide-steps/step2.png";
-const step3Img = "/guide-steps/step3.png";
+/* ─── 紅色標註箭頭元件 ─── */
+function Arrow({ label, dir = "down" }: { label: string; dir?: "down" | "right" | "left" }) {
+  const arrow = dir === "right" ? "→" : dir === "left" ? "←" : "↓";
+  return (
+    <span className="inline-flex items-center gap-1 text-red-400 font-black text-base animate-pulse select-none">
+      <span className="text-xl">{arrow}</span> {label}
+    </span>
+  );
+}
 
-const databaseImg = "/guide-steps/database.png";
-const anglesImg = "/guide-steps/angles.png";
-const plansImg = "/guide-steps/plans.png";
+/* ─── 步驟卡片元件 ─── */
+function StepCard({
+  num,
+  title,
+  children,
+  tip,
+}: {
+  num: number;
+  title: string;
+  children: React.ReactNode;
+  tip?: string;
+}) {
+  return (
+    <div className="rounded-2xl border border-white/10 bg-white/[0.03] p-6 md:p-8 space-y-4">
+      <div className="flex items-start gap-3">
+        <span className="flex-shrink-0 w-9 h-9 rounded-full bg-red-500 text-white font-black text-sm flex items-center justify-center">
+          {num}
+        </span>
+        <h3 className="text-lg md:text-xl font-black text-white leading-snug pt-1">{title}</h3>
+      </div>
+      <div className="pl-12 space-y-3 text-white/80 text-sm leading-relaxed">{children}</div>
+      {tip && (
+        <div className="ml-12 rounded-xl bg-amber-500/10 border border-amber-500/20 px-4 py-3">
+          <span className="text-amber-300 font-bold text-xs">💡 小提醒：</span>
+          <span className="text-white/70 text-sm ml-1">{tip}</span>
+        </div>
+      )}
+    </div>
+  );
+}
 
-/** 每個大步驟底下拆成「連國小生都懂」的小步驟 */
-const steps = [
-  {
-    id: "register",
-    title: "第一步：註冊帳號（第一次使用一定要做）",
-    desc: "沒有帳號就不能用爆款分析跟生成腳本。註冊是免費的，而且會送你 3 次分析 + 3 次生成，不用先付錢。",
-    detail: [
-      "打開 Hookvox 首頁，點上面或下面的「免費試用」或「註冊」按鈕。",
-      "你會進到註冊頁面。上面有幾個空格要填：",
-      "① 第一個空格：填你的「Email」（就是你的電子信箱，例如 xxx@gmail.com）。",
-      "② 第二個空格：填你要設的「密碼」。密碼要至少 6 個字，自己記好。",
-      "③ 下面可能有一個「勾選框」或「我不是機器人」的驗證，照著畫面點選或打勾。",
-      "全部填好後，按「註冊」或「送出」按鈕。",
-      "註冊成功的話，你會自動登入，並被帶到「控制台」頁面。這裡可以看到你這個月還有幾次可以用（免費是 3 次分析 + 3 次生成）。",
-    ],
-    tip: "如果之後要再進來，就點「登入」，用同一組 Email 和密碼即可。",
-    cta: "前往註冊",
-    href: "/register",
-  },
-  {
-    id: "analyze",
-    title: "第二步：爆款分析（讓 AI 幫你拆解一支爆紅的影片）",
-    desc: "你要先選一支「別人已經拍紅的影片」，讓 Hookvox 幫你分析：這支影片為什麼紅？開頭怎麼抓人？我們把這個步驟叫做「爆款分析」。",
-    detail: [
-      "登入後，點左邊或上面的「爆款分析」，進入分析頁面。",
-      "你要給 Hookvox 一支影片。有兩種方式：",
-      "方式 A — 貼網址：目前僅支援 YouTube Shorts 網址。找到「YouTube Shorts 連結」的空格，把你想學的那支影片網址貼上。",
-      "方式 B — 上傳檔案：如果你已經有合法取得的影片或音訊檔，可以點「上傳音訊或影片」，選你的檔案。上傳後系統只會先檢查格式與大小，還不會扣你的次數。",
-      "弄好網址或檔案之後，先不要急著按分析。請先找到「開始爆款分析」這個按鈕。",
-      "按下「開始爆款分析」後，會跳出一個小視窗，告訴你：等一下會先轉錄（把影片變成文字），再分析，而且會扣掉 1 次「分析」的額度。確認沒問題就按「確認」。",
-      "接著畫面會顯示處理中，等幾十秒到一兩分鐘（看影片長度）。完成後，你就會看到一整頁的分析結果。",
-      "結果裡會有：核心主題、Hook 類型、開頭 Hook、分析摘要、痛點、關鍵洞察、爆款公式……這些都是 AI 幫你整理好的，你可以從這裡學到「這支影片為什麼會紅」。",
-    ],
-    tip: "免費方案只有 3 次分析。若影片太大，先看下方「上傳檔案準備教學」把檔案壓縮到可轉錄大小。",
-    cta: "前往爆款分析",
-    href: "/analyze",
-  },
-  {
-    id: "upload-files",
-    title: "第三步：上傳檔案準備教學（合法取得影片 + 壓縮到可上傳）",
-    desc: "很多手機影片會是 HEVC、高幀率、超過 50MB，甚至破百 MB。Hookvox 目前的轉錄服務單檔上限約 25MB，所以你需要先用合法來源拿到影片，再壓到可上傳大小。",
-    detail: [
-      "先確認來源是否合法：只使用你自己的原始影片、客戶/合作對象主動提供給你的原檔、或你已取得授權的素材。若創作者關閉下載，不要嘗試繞過限制；正確做法是直接向原創作者索取原檔與授權。",
-      "如果是你自己的 IG / Reels 影片：優先使用你手機相簿裡的原始檔、剪映 / CapCut 專案原始輸出檔，或你拍攝時留存的母檔。不要等到發佈後再找低品質轉存版本。",
-      "如果是客戶、學員、合作夥伴或團隊成員的影片：請對方直接用 AirDrop、LINE、Google Drive、Dropbox 或 Email 傳原始檔給你，並確認你有分析與改寫的使用權。",
-      "如果是想研究別人的爆款：建議優先用 YouTube Shorts 網址分析；若不是 YouTube Shorts，請改請對方提供原檔，或自己整理逐字稿後貼進系統。這樣最合法也最穩。",
-      "壓縮影片最簡單的方式：用剪映 / CapCut 開啟影片後重新匯出。匯出設定建議選 720p、30fps、H.264；若原片是 HEVC、1080p、60fps，這樣通常能大幅縮小檔案。",
-      "若你用的是 iPhone：請把影片匯入剪映 / CapCut，輸出時把畫質調成 720p、幀率調成 30fps，關掉 HDR 或高效率影片需求，格式以一般 mp4 為主。",
-      "若你用的是 Android：一樣建議用剪映 / CapCut 或手機內建剪輯工具重新輸出成 720p、30fps、mp4。不要直接丟 1080p / 60fps / HEVC 的原片。",
-      "若影片還是太大：先把片長縮短到 30～60 秒，或只截你要分析的那一段。Hookvox 要分析的是內容結構，不一定需要整支長片都上傳。",
-      "如果你真的不知道怎麼壓：最簡單就照這三個值輸出即可：720p、30fps、mp4。大多數情況這樣就能把手機影片壓到可上傳範圍。",
-    ],
-    tip: "目前不是 Hookvox 故意不給上傳大檔，而是轉錄服務本身有單檔大小限制。先壓到 24MB 以下，成功率最高。",
-    cta: "前往爆款分析",
-    href: "/analyze",
-  },
-  {
-    id: "generate",
-    title: "第四步：生成腳本與標題（把爆款套成「你的」內容）",
-    desc: "分析完別人的爆款之後，下一步是：用同樣的結構，但換成「你的主題、你的主角」。AI 會幫你生出好幾版腳本跟很多個標題，你選喜歡的用就好。",
-    detail: [
-      "在爆款分析結果頁面，往下面捲，會看到「生成腳本與標題」的區塊。",
-      "先填兩個東西：①「行業」：選你最接近的（例如美業、保險、食譜、健身……）。②「你的主題／主角」：用一句話寫你要拍什麼，例如「減脂 3 個月的心得」「紋繡前的 3 個注意事項」。",
-      "填好之後，按「生成腳本與標題」按鈕。這裡會扣掉 1 次「生成」的額度（免費方案共 3 次）。",
-      "等一會兒，畫面上就會出現：好幾版腳本（例如對話型、數字型、身份認同型）、很多個標題、有的行業還會給分鏡表。",
-      "你可以多看幾版，選一個最順的腳本、幾個喜歡的標題，之後拍片就用這些。",
-      "如果覺得想微調，可以改一下「你的主題」再按一次生成（會再扣 1 次生成額度）。",
-      "滿意之後，記得按「保存到爆款資料庫」。按了之後，這支影片的分析 + 腳本 + 標題都會存起來，之後在「爆款資料庫」裡都找得到。",
-    ],
-    tip: "標題可以多選幾個，拍完片之後 A/B 測試不同標題，看哪個點擊率高。",
-    cta: "前往爆款分析",
-    href: "/analyze",
-  },
-  {
-    id: "database",
-    title: "第五步：爆款資料庫與靈感簿（把你分析過的都存好）",
-    desc: "所有你「分析過」或「保存過」的影片，都會出現在「爆款資料庫」。你可以在這裡搜尋、收藏、複製標題、甚至匯出成一份筆記。",
-    detail: [
-      "點左邊或上面的「爆款資料庫」，就會進到資料庫頁面。",
-      "你會看到兩個分頁：「全部影片」和「靈感簿」。全部影片 = 你所有分析過的；靈感簿 = 你特別收藏起來的。",
-      "想找某支影片時：在搜尋框輸入關鍵字（例如主題、Hook、痛點、標題裡的某幾個字），按「搜尋」，就會篩出符合的影片。",
-      "看到喜歡的影片，想之後容易找到：按那支影片卡片上的「加入靈感簿」按鈕，它就會出現在「靈感簿」分頁裡。",
-      "如果你升級成 Pro 或旗艦方案：在每支影片的「已保存的生成內容」區塊，會多一個「一鍵複製全部標題」按鈕，按下去就會把所有標題複製到剪貼簿，方便你貼到別的地方用。",
-      "同樣地，Pro / 旗艦在每支影片卡片上會多一個「匯出 .txt」按鈕。按下去會下載一份文字檔，裡面有：原影片連結、分析內容、標題、腳本，方便你存檔或列印。",
-    ],
-    tip: "靈感簿就像「我的最愛」，把最想參考的幾支放在這裡，之後要做新片時直接來翻。",
-    cta: "前往爆款資料庫",
-    href: "/viral-db",
-  },
-  {
-    id: "angles",
-    title: "第六步：爆款延伸角度與延伸腳本（一支影片變好多版本）",
-    desc: "同一支爆款，還可以再延伸出「不同角度」的腳本。例如同一支影片，可以變成「角度 A：省錢版」「角度 B：懶人版」「角度 C：專業版」。每個角度都可以再生成一整份腳本。",
-    detail: [
-      "在爆款資料庫裡，每一支影片往下捲，會看到「爆款延伸」這個區塊。",
-      "如果這支影片還沒生成過延伸：會有一個按鈕「生成 3 個爆款延伸」。按下去之後，AI 會給你 3 個不同的「角度」跟對應的 Hook（開頭），每個角度都不一樣。",
-      "每個角度下面會有一個「生成延伸腳本」按鈕。按下去，AI 就會幫那個角度寫出一份完整腳本（開頭 + 中間 + 結尾 CTA）。",
-      "要注意：免費方案「不能」生成延伸腳本。Creator 方案每支影片可以生成 1 個延伸腳本；Pro 和旗艦每支可以生成 3 個。所以你會看到按鈕能不能按，是依你的方案決定的。",
-    ],
-    tip: "延伸腳本很適合「同一支爆款想拍好幾種版本」的時候用，例如同一個主題拍給不同客群看。",
-    cta: "前往爆款資料庫",
-    href: "/viral-db",
-  },
-  {
-    id: "plans",
-    title: "第七步：方案與付費、帳單（額度用完想升級看這裡）",
-    desc: "免費試用只有 3 次分析 + 3 次生成。用完之後若還想繼續用，就要升級方案。這裡也說明在哪裡看自己用了幾次、什麼時候到期。",
-    detail: [
-      "「方案」頁：點左邊或上面的「方案」，可以看到 Free、Creator、Pro、旗艦的差別（每個月幾次、多少錢）。選一個方案後按「升級」或「訂閱」，就會引導你去付款（綠界金流）。",
-      "「帳單」頁：這裡可以看到你「現在是哪一個方案」、「這期已經用了幾次 / 總共幾次」、「這期到哪一天到期」（下次續訂日）、以及過去的付款記錄。",
-      "「控制台」頁：一登入就會看到「本月總使用量」和「過去 7 天已使用：分析 X 次、生成 Y 次」，讓你快速知道還剩多少額度。",
-      "升級時：如果你是在有效期內從較便宜的付費方案升到較高方案（例如 Creator 升 Pro），系統會用目標方案原價扣掉你目前方案已付款金額，原本已使用的次數會延續。免費升付費或已到期後重新訂閱，則會開新週期並重新計算額度。目前尚未開放自動扣款。",
-    ],
-    tip: "怕忘記用了幾次的話，可以常去控制台或帳單頁看一下「剩餘次數」和「到期日」。",
-    cta: "查看方案",
-    href: "/plans",
-  },
-];
+/* ─── 模擬 UI 區塊（帶紅色箭頭標註） ─── */
+function MockUI({ children, className = "" }: { children: React.ReactNode; className?: string }) {
+  return (
+    <div className={`rounded-xl border border-white/10 bg-white/5 p-4 md:p-5 space-y-3 ${className}`}>
+      {children}
+    </div>
+  );
+}
+
+/* ─── 分隔線 ─── */
+function Divider({ label }: { label: string }) {
+  return (
+    <div className="flex items-center gap-4 py-6">
+      <div className="flex-1 h-px bg-gradient-to-r from-transparent via-red-500/40 to-transparent" />
+      <span className="text-red-400 font-bold text-sm whitespace-nowrap">{label}</span>
+      <div className="flex-1 h-px bg-gradient-to-r from-transparent via-red-500/40 to-transparent" />
+    </div>
+  );
+}
+
+/* ─── 主要分類 TAB ─── */
+const TABS = [
+  { id: "start", label: "🚀 註冊 / 登入" },
+  { id: "analyze", label: "🔍 爆款分析" },
+  { id: "generate", label: "✨ 生成腳本" },
+  { id: "database", label: "📚 資料庫" },
+  { id: "extend", label: "🎯 爆款延伸" },
+  { id: "plans", label: "💳 方案 / 帳單" },
+  { id: "settings", label: "⚙️ 設定" },
+] as const;
+
+type TabId = (typeof TABS)[number]["id"];
 
 export default function GuidePage() {
-  const tabs = useMemo(
-    () =>
-      [
-        { id: "analyze", label: "爆款分析" },
-        { id: "generate", label: "生成腳本與標題" },
-        { id: "database", label: "爆款資料庫" },
-        { id: "angles", label: "爆款延伸角度" },
-        { id: "plans", label: "方案/帳單" },
-      ] as const,
-    []
-  );
-
-  type TabId = (typeof tabs)[number]["id"];
-  const [activeTab, setActiveTab] = useState<TabId>(tabs[0].id);
-
-  const stepMeta = useMemo(() => {
-    const get = (id: TabId) => steps.find((s) => s.id === id);
-    return {
-      analyze: get("analyze"),
-      generate: get("generate"),
-      database: get("database"),
-      angles: get("angles"),
-      plans: get("plans"),
-    };
-  }, []);
+  const [tab, setTab] = useState<TabId>("start");
 
   return (
-    <div className="min-h-screen bg-dark-900 overflow-hidden">
-      <nav className="fixed top-0 w-full z-50 border-b border-white/5 bg-dark-900/80 backdrop-blur-xl">
-        <div className="max-w-7xl mx-auto px-6 h-16 flex items-center justify-between">
-          <Link href="/" className="flex items-center gap-2">
-            <div className="w-8 h-8 rounded-lg bg-brand-500 flex items-center justify-center text-white font-black text-sm">
-              H
-            </div>
-            <span className="font-bold text-lg">Hookvox</span>
+    <div className="min-h-screen bg-black text-white">
+      {/* ─── 頂部導覽 ─── */}
+      <header className="sticky top-0 z-50 border-b border-white/10 bg-black/90 backdrop-blur">
+        <div className="max-w-5xl mx-auto px-6 h-14 flex items-center justify-between">
+          <Link href="/dashboard" className="font-bold text-lg">
+            Hookvox <span className="text-white/40 text-xs font-normal ml-1">教學指南</span>
           </Link>
-          <div className="hidden md:flex items-center gap-5">
-            <Link href="/success-cases" className="text-sm text-white/60 hover:text-white transition-colors">
-              成功案例
+          <div className="flex gap-3">
+            <Link href="/analyze" className="text-sm text-white/60 hover:text-white transition">
+              爆款分析
             </Link>
-            <Link href="/plans" className="text-sm text-white/60 hover:text-white transition-colors">
-              方案
-            </Link>
-            <Link href="/register" className="text-sm bg-brand-500 hover:bg-brand-600 text-white px-4 py-2 rounded-lg font-medium transition-colors">
+            <Link href="/register" className="text-sm bg-red-500 hover:bg-red-600 text-white px-3 py-1.5 rounded-lg font-medium transition">
               免費試用
             </Link>
           </div>
         </div>
-      </nav>
+      </header>
 
-      <section className="pt-28 pb-12 px-6">
-        <div className="max-w-3xl mx-auto text-center">
-          <div className="inline-flex items-center gap-2 bg-brand-500/10 border border-brand-500/20 text-brand-400 text-sm px-4 py-2 rounded-full mb-6">
-            一步一步來，照做就會用
-          </div>
-          <h1 className="text-4xl md:text-5xl font-black mb-4 text-white">
-            全部功能步驟教學
-          </h1>
-          <p className="text-white/50 text-lg leading-relaxed">
-            從註冊到付費，每個步驟都拆開講。照著做，連第一次用的人也能完成。
-          </p>
-        </div>
+      {/* ─── 標題區 ─── */}
+      <section className="pt-16 pb-8 px-6 text-center">
+        <h1 className="text-3xl md:text-4xl font-black mb-3">
+          Hookvox 完整功能教學
+        </h1>
+        <p className="text-white/50 text-base max-w-xl mx-auto">
+          從註冊到付費，每個步驟都拆開講。<br className="hidden sm:block" />
+          照著做，第一次用也能輕鬆上手。
+        </p>
       </section>
 
-      <section className="pb-24 px-6">
-        <div className="max-w-3xl mx-auto space-y-14">
-          <div className="glass rounded-2xl p-6 space-y-6">
-            <div className="flex items-center gap-3 flex-wrap">
-              {tabs.map((t) => (
-                <button
-                  key={t.id}
-                  type="button"
-                  onClick={() => setActiveTab(t.id)}
-                  className={`px-4 py-2 rounded-xl border transition-colors text-sm font-semibold ${
-                    activeTab === t.id
-                      ? "bg-brand-500 border-brand-500 text-white"
-                      : "bg-white/5 border-white/10 text-white/60 hover:text-white hover:border-white/20"
-                  }`}
-                >
-                  {t.label}
-                </button>
-              ))}
-            </div>
+      {/* ─── TAB 切換 ─── */}
+      <div className="sticky top-14 z-40 bg-black/90 backdrop-blur border-b border-white/5">
+        <div className="max-w-5xl mx-auto px-4 py-3 flex gap-2 overflow-x-auto scrollbar-hide">
+          {TABS.map((t) => (
+            <button
+              key={t.id}
+              onClick={() => setTab(t.id)}
+              className={`whitespace-nowrap px-4 py-2 rounded-xl text-sm font-semibold transition-all ${
+                tab === t.id
+                  ? "bg-red-500 text-white shadow-lg shadow-red-500/20"
+                  : "bg-white/5 text-white/50 hover:text-white hover:bg-white/10"
+              }`}
+            >
+              {t.label}
+            </button>
+          ))}
+        </div>
+      </div>
 
-            {activeTab === "analyze" ? (
-              <div id="upload-files" className="space-y-5">
-                <div>
-                  <h2 className="text-xl font-black text-white mb-2">{stepMeta.analyze?.title}</h2>
-                  <p className="text-white/60 text-sm leading-relaxed">
-                    {stepMeta.analyze?.desc ?? "先選你想學的影片，接著用系統的「開始爆款分析」把影片轉成逐字稿並分析爆款結構。"}
-                  </p>
-                </div>
+      {/* ─── 內容區 ─── */}
+      <main className="max-w-3xl mx-auto px-6 py-10 space-y-6">
 
-                <div className="rounded-xl border border-red-500/25 bg-red-500/10 p-5">
-                  <div className="text-red-300 font-black text-lg mb-2">規則：只上傳「24MB 以下」影片</div>
-                  <div className="text-white/80 text-sm leading-relaxed">
-                    目前轉錄服務單檔上限約 25MB，所以用 <span className="text-red-200 font-bold">24MB</span> 作安全值，避免上傳後才失敗。
+        {/* ===== 註冊 / 登入 ===== */}
+        {tab === "start" && (
+          <>
+            <StepCard num={1} title="前往註冊頁面">
+              <p>打開 <code className="bg-white/10 px-2 py-0.5 rounded text-red-300">hookvox-1yib.vercel.app/register</code></p>
+              <p>或在任何頁面點右上角的 <span className="text-red-400 font-bold">「註冊」</span> 按鈕。</p>
+            </StepCard>
+
+            <StepCard num={2} title="填寫註冊資料" tip="密碼至少 8 碼，要包含大寫、小寫、數字。">
+              <MockUI>
+                <div className="space-y-2">
+                  <div className="flex items-center gap-2">
+                    <Arrow label="填你的 Email" dir="right" />
+                    <div className="flex-1 h-10 rounded-lg bg-white/10 border border-white/20 flex items-center px-3 text-white/40 text-sm">
+                      請輸入你的 Email
+                    </div>
+                  </div>
+                  <div className="flex items-center gap-2">
+                    <Arrow label="設定密碼" dir="right" />
+                    <div className="flex-1 h-10 rounded-lg bg-white/10 border border-white/20 flex items-center px-3 text-white/40 text-sm">
+                      至少 8 碼，含大寫、小寫、數字
+                    </div>
+                  </div>
+                  <div className="flex items-center gap-2">
+                    <Arrow label="等它顯示「成功 ✓」" dir="right" />
+                    <div className="h-10 rounded-lg bg-green-900/30 border border-green-500/30 flex items-center px-3 text-green-400 text-sm gap-2">
+                      ✅ 成功! <span className="text-white/30 text-xs">CLOUDFLARE</span>
+                    </div>
                   </div>
                 </div>
+              </MockUI>
+              <div className="pt-2 flex justify-center">
+                <Arrow label="全部填好後，按這個按鈕" dir="down" />
+              </div>
+              <MockUI className="!bg-red-500/20 !border-red-500/30">
+                <div className="text-center text-red-300 font-bold py-1">立即註冊</div>
+              </MockUI>
+              <p className="text-white/60">註冊成功後會自動登入，並帶你到控制台。</p>
+            </StepCard>
 
+            <StepCard num={3} title="已有帳號？登入方式">
+              <p>到 <code className="bg-white/10 px-2 py-0.5 rounded text-red-300">hookvox-1yib.vercel.app/login</code></p>
+              <p>輸入 Email + 密碼 → 等真人驗證顯示「成功 ✓」→ 按 <span className="text-red-400 font-bold">「立即登入」</span></p>
+              <p className="text-amber-300">⚠️ 一定要等 Cloudflare 驗證出現綠色勾勾再按登入，不然會失敗！</p>
+            </StepCard>
+
+            <Divider label="註冊完成 → 進入控制台" />
+
+            <StepCard num={4} title="控制台：你的使用總覽">
+              <MockUI>
+                <div className="flex justify-between items-start">
+                  <div>
+                    <div className="text-white/50 text-xs">本月總使用量</div>
+                    <div className="text-2xl font-black text-white">3 <span className="text-sm text-white/40 font-normal">/ 400 次</span></div>
+                    <div className="w-full h-1.5 bg-white/10 rounded-full mt-1">
+                      <div className="h-full bg-green-500 rounded-full" style={{ width: "1%" }} />
+                    </div>
+                  </div>
+                  <div className="text-right">
+                    <Arrow label="你的方案" dir="left" />
+                    <div className="text-white font-bold">專業版</div>
+                  </div>
+                </div>
+              </MockUI>
+              <p>這裡可以看到你的 <span className="text-white font-bold">方案、剩餘次數、最近使用紀錄</span>。</p>
+              <p>下面還有快速入口：<span className="text-red-400">「開始分析 →」</span> 和 <span className="text-red-400">「查看資料庫 →」</span></p>
+            </StepCard>
+          </>
+        )}
+
+        {/* ===== 爆款分析 ===== */}
+        {tab === "analyze" && (
+          <>
+            <StepCard num={1} title="進入爆款分析頁面">
+              <p>點上方導覽列的 <span className="text-red-400 font-bold">「爆款分析」</span>。</p>
+              <MockUI>
+                <div className="flex gap-4 text-sm">
+                  <span className="text-white/40">控制台</span>
+                  <span className="text-red-400 font-bold border-b-2 border-red-400 pb-1">爆款分析 <Arrow label="" dir="down" /></span>
+                  <span className="text-white/40">爆款資料庫</span>
+                  <span className="text-white/40">方案</span>
+                </div>
+              </MockUI>
+            </StepCard>
+
+            <StepCard num={2} title="選擇分析來源（三選一）">
+              <MockUI>
+                <div className="flex gap-2 flex-wrap">
+                  <div className="relative">
+                    <span className="px-4 py-2 rounded-lg bg-red-500/20 border border-red-500/40 text-red-300 text-sm font-bold">
+                      上傳音訊 / 影片
+                    </span>
+                    <div className="absolute -top-6 left-1/2 -translate-x-1/2">
+                      <Arrow label="方式 A" dir="down" />
+                    </div>
+                  </div>
+                  <div className="relative">
+                    <span className="px-4 py-2 rounded-lg bg-white/5 border border-white/10 text-white/60 text-sm">
+                      貼逐字稿
+                    </span>
+                    <div className="absolute -top-6 left-1/2 -translate-x-1/2">
+                      <Arrow label="方式 B" dir="down" />
+                    </div>
+                  </div>
+                  <div className="relative">
+                    <span className="px-4 py-2 rounded-lg bg-white/5 border border-white/10 text-white/60 text-sm">
+                      YouTube Shorts 連結
+                    </span>
+                    <div className="absolute -top-6 left-1/2 -translate-x-1/2">
+                      <Arrow label="方式 C" dir="down" />
+                    </div>
+                  </div>
+                </div>
+              </MockUI>
+              <p><span className="text-white font-bold">方式 A：上傳檔案</span> — 點擊上傳區選擇你的影片或音訊檔。</p>
+              <p><span className="text-white font-bold">方式 B：貼逐字稿</span> — 如果你已經有影片的文字稿，直接貼上。</p>
+              <p><span className="text-white font-bold">方式 C：YouTube Shorts 連結</span> — 貼上 YouTube Shorts 的網址。</p>
+            </StepCard>
+
+            <StepCard num={3} title="上傳檔案注意事項" tip="iPhone 拍的影片通常是 .mov 格式，系統已支援自動轉檔。但建議先壓縮到 24MB 以下。">
+              <div className="rounded-xl bg-red-500/10 border border-red-500/25 p-4 space-y-2">
+                <div className="text-red-300 font-bold">📏 檔案大小限制：24MB 以下</div>
+                <p className="text-white/70 text-sm">
+                  轉錄服務單檔上限約 25MB。建議壓到 <span className="text-red-300 font-bold">24MB 以下</span> 最穩。
+                </p>
+              </div>
+              <div className="rounded-xl bg-white/5 border border-white/10 p-4 space-y-2">
+                <div className="text-white font-bold text-sm">壓縮教學（用剪映 / CapCut）：</div>
+                <ol className="list-decimal list-inside space-y-1 text-white/70 text-sm">
+                  <li>開啟剪映 / CapCut，匯入你的影片</li>
+                  <li>輸出設定選 <span className="text-red-300 font-bold">720p、30fps、H.264</span></li>
+                  <li>如果還太大，縮短片長到 30～60 秒</li>
+                  <li>確認輸出檔案 &lt; 24MB 再上傳</li>
+                </ol>
+              </div>
+              <p className="text-white/60">支援格式：mp3 / mp4 / m4a / wav / webm / mov</p>
+            </StepCard>
+
+            <StepCard num={4} title="填寫內容設定（選填但建議填）">
+              <MockUI>
                 <div className="space-y-3">
-                  <div className="text-sm font-bold text-white/80">壓縮影片（剪映 / CapCut）</div>
-                  <div className="rounded-xl bg-white/5 border border-white/10 p-4 space-y-4">
-                    <div style={{ display: "grid", gap: 16 }}>
-                      <div style={{ display: "grid", gap: 10 }}>
-                        <div className="text-white/90 font-bold text-sm">步驟 1：按「开始创作」</div>
-                        <img src={step1Img} alt="開始創作步驟" style={{ width: "100%", borderRadius: 12 }} />
-                      </div>
-                      <div style={{ display: "grid", gap: 10 }}>
-                        <div className="text-white/90 font-bold text-sm">步驟 2：上方選「1080P」</div>
-                        <img src={step2Img} alt="1080P 步驟" style={{ width: "100%", borderRadius: 12 }} />
-                      </div>
-                      <div style={{ display: "grid", gap: 10 }}>
-                        <div className="text-white/90 font-bold text-sm">步驟 3：480P + 24fps + 較低码率 → 导出</div>
-                        <img src={step3Img} alt="480P 24fps 导出 步驟" style={{ width: "100%", borderRadius: 12 }} />
+                  <div>
+                    <div className="flex items-center gap-2 mb-1">
+                      <Arrow label="選你的行業" dir="right" />
+                      <span className="text-white/50 text-xs">產業</span>
+                    </div>
+                    <div className="h-10 rounded-lg bg-white/10 border border-white/20 flex items-center justify-between px-3 text-white/60 text-sm">
+                      通用 <span>▾</span>
+                    </div>
+                  </div>
+                  <div>
+                    <div className="flex items-center gap-2 mb-1">
+                      <Arrow label="寫你的主題" dir="right" />
+                      <span className="text-white/50 text-xs">主題（選填）</span>
+                    </div>
+                    <div className="h-10 rounded-lg bg-white/10 border border-white/20 flex items-center px-3 text-white/40 text-sm">
+                      例如：30歲存第一桶金方法
+                    </div>
+                  </div>
+                  <div>
+                    <div className="flex items-center gap-2 mb-1">
+                      <Arrow label="填你的受眾" dir="right" />
+                      <span className="text-white/50 text-xs">目標受眾（選填）</span>
+                    </div>
+                    <div className="h-10 rounded-lg bg-white/10 border border-white/20 flex items-center px-3 text-white/40 text-sm">
+                      例如：月薪3萬的上班族
+                    </div>
+                  </div>
+                </div>
+              </MockUI>
+            </StepCard>
+
+            <StepCard num={5} title="按下「開始爆款分析」" tip="每次分析消耗 1 次分析額度。免費方案共 3 次。">
+              <MockUI>
+                <div className="space-y-3">
+                  <div className="text-center">
+                    <Arrow label="按這裡開始分析" dir="down" />
+                  </div>
+                  <div className="flex gap-3 justify-center flex-wrap">
+                    <div className="px-6 py-3 rounded-lg bg-red-500 text-white font-bold text-sm">
+                      開始爆款分析
+                    </div>
+                    <div className="px-6 py-3 rounded-lg bg-blue-600 text-white font-bold text-sm">
+                      ✨ 生成腳本和標題
+                    </div>
+                  </div>
+                </div>
+              </MockUI>
+              <p>按下後系統會：① 轉錄影片（把影片變文字）→ ② AI 分析爆款結構</p>
+              <p>等 30 秒 ~ 2 分鐘（視影片長度），就會看到完整分析結果。</p>
+            </StepCard>
+
+            <StepCard num={6} title="看分析結果">
+              <p>分析完成後你會看到：</p>
+              <MockUI>
+                <div className="grid grid-cols-2 gap-3">
+                  <div className="rounded-lg bg-white/5 p-3">
+                    <div className="text-white/40 text-xs mb-1">核心主題</div>
+                    <div className="text-white text-sm font-bold">AI 幫你整理的主題</div>
+                  </div>
+                  <div className="rounded-lg bg-white/5 p-3">
+                    <div className="text-white/40 text-xs mb-1">Hook 類型</div>
+                    <div className="text-white text-sm font-bold">錯誤揭露型 / 數字型...</div>
+                  </div>
+                </div>
+                <div className="rounded-lg bg-white/5 p-3">
+                  <div className="text-white/40 text-xs mb-1">開頭 Hook</div>
+                  <div className="text-white text-sm">開場的那句吸引人的話</div>
+                </div>
+                <div className="rounded-lg bg-white/5 p-3">
+                  <div className="text-white/40 text-xs mb-1">分析摘要</div>
+                  <div className="text-white/70 text-sm">AI 解釋這支影片為什麼紅</div>
+                </div>
+              </MockUI>
+            </StepCard>
+          </>
+        )}
+
+        {/* ===== 生成腳本 ===== */}
+        {tab === "generate" && (
+          <>
+            <StepCard num={1} title="先完成「爆款分析」">
+              <p>生成腳本的前提是：你要先有一支分析過的影片。</p>
+              <p>如果還沒分析 → 先去 <span className="text-red-400 font-bold">「爆款分析」</span> tab 完成分析。</p>
+            </StepCard>
+
+            <StepCard num={2} title="填寫「套用到我的內容」設定">
+              <MockUI>
+                <div className="rounded-lg bg-green-900/20 border border-green-500/20 p-4 space-y-3">
+                  <div className="text-green-400 font-bold text-sm">③ 套用到我的內容（選填）</div>
+                  <div className="text-white/50 text-xs">分析完爆款公式後，AI 會把同樣的公式套用到你自己的主角。不填就直接複製原影片的邏輯。</div>
+                  <div>
+                    <div className="flex items-center gap-2 mb-1">
+                      <Arrow label="填你想拍的主題" dir="right" />
+                    </div>
+                    <div className="h-10 rounded-lg bg-white/10 border border-white/20 flex items-center px-3 text-white/40 text-sm">
+                      例如：換成我的行業、改成台灣在地案例
+                    </div>
+                  </div>
+                </div>
+              </MockUI>
+            </StepCard>
+
+            <StepCard num={3} title="按「生成腳本和標題」" tip="每次生成消耗 1 次生成額度。免費方案共 3 次。">
+              <MockUI>
+                <div className="text-center space-y-2">
+                  <Arrow label="按這裡生成" dir="down" />
+                  <div className="inline-block px-6 py-3 rounded-lg bg-blue-600 text-white font-bold text-sm">
+                    ✨ 生成腳本和標題
+                  </div>
+                </div>
+              </MockUI>
+              <p>等幾十秒，AI 就會生成：</p>
+              <ul className="list-disc list-inside text-white/70 space-y-1">
+                <li><span className="text-white font-bold">多個標題</span>（8～10 個不同版本）</li>
+                <li><span className="text-white font-bold">多版腳本</span>（對話型、數字型、身份認同型等）</li>
+                <li><span className="text-white font-bold">分鏡表</span>（部分行業會自動生成）</li>
+              </ul>
+            </StepCard>
+
+            <StepCard num={4} title="查看生成結果">
+              <MockUI>
+                <div className="space-y-2">
+                  <div className="flex items-center justify-between">
+                    <span className="text-green-400 font-bold text-sm">已保存的生成內容</span>
+                    <div className="flex items-center gap-2">
+                      <Arrow label="一鍵複製" dir="right" />
+                      <span className="px-3 py-1 rounded bg-green-600 text-white text-xs font-bold">一鍵複製全部標題</span>
+                    </div>
+                  </div>
+                  <div className="text-white/50 text-xs">生成標題</div>
+                  <div className="space-y-1.5 text-white/80 text-sm">
+                    <div>1. 如果你還在對AI說請跟謝謝，那你真的會一輩子用不好AI</div>
+                    <div>2. 對AI說禮貌話？準確率直接掉5%</div>
+                    <div>3. AI根本不需要你客氣，它只需要你夠直接</div>
+                  </div>
+                </div>
+              </MockUI>
+              <MockUI>
+                <div className="space-y-2">
+                  <div className="text-center">
+                    <Arrow label="展開看完整腳本" dir="down" />
+                  </div>
+                  <div className="px-4 py-2.5 rounded-lg bg-red-500/10 border border-red-500/20 text-red-300 font-bold text-sm text-center">
+                    ▶ 查看生成腳本（3 版）
+                  </div>
+                </div>
+              </MockUI>
+              <p>你可以挑最喜歡的標題和腳本，直接複製去拍片用！</p>
+            </StepCard>
+          </>
+        )}
+
+        {/* ===== 爆款資料庫 ===== */}
+        {tab === "database" && (
+          <>
+            <StepCard num={1} title="進入爆款資料庫">
+              <p>點上方導覽列的 <span className="text-red-400 font-bold">「爆款資料庫」</span>。</p>
+              <p>所有你分析過的影片都會自動出現在這裡。</p>
+            </StepCard>
+
+            <StepCard num={2} title="搜尋與篩選">
+              <MockUI>
+                <div className="space-y-3">
+                  <div className="flex items-center gap-2">
+                    <div className="flex-1 h-10 rounded-lg bg-white/10 border border-white/20 flex items-center px-3 text-white/40 text-sm">
+                      搜尋主題、Hook、痛點、標題...
+                    </div>
+                    <Arrow label="輸入關鍵字" dir="left" />
+                  </div>
+                  <div className="flex gap-2">
+                    <div className="relative">
+                      <span className="px-4 py-2 rounded-lg bg-red-500 text-white text-sm font-bold">全部影片</span>
+                      <div className="absolute -bottom-5 left-1/2 -translate-x-1/2 whitespace-nowrap">
+                        <span className="text-red-300 text-xs">↑ 所有分析過的</span>
                       </div>
                     </div>
-
-                    <div className="text-white/70 text-sm leading-relaxed">
-                      壓縮後請確認檔案大小 <span className="text-white font-bold">小於 24MB</span> 再上傳。
-                      若還是超過：再縮短片長或把輸出參數往更低一點。
+                    <div className="relative">
+                      <span className="px-4 py-2 rounded-lg bg-white/10 text-white/60 text-sm">靈感簿</span>
+                      <div className="absolute -bottom-5 left-1/2 -translate-x-1/2 whitespace-nowrap">
+                        <span className="text-red-300 text-xs">↑ 你收藏的</span>
+                      </div>
                     </div>
+                  </div>
+                </div>
+              </MockUI>
+            </StepCard>
 
+            <StepCard num={3} title="使用每支影片的功能">
+              <MockUI>
+                <div className="space-y-2 text-sm">
+                  <div className="flex items-center justify-between">
+                    <span className="text-white/50">分析時間：2026/3/20 下午12:37:29</span>
+                    <div className="flex gap-2">
+                      <span className="text-red-400 text-xs underline">原影片連結 →</span>
+                      <Arrow label="匯出文字檔" dir="right" />
+                      <span className="px-2 py-1 rounded bg-white/10 text-white/70 text-xs">匯出 .txt</span>
+                      <Arrow label="收藏" dir="right" />
+                      <span className="px-2 py-1 rounded bg-white/10 text-white/70 text-xs">加入靈感簿</span>
+                    </div>
+                  </div>
+                </div>
+              </MockUI>
+              <ul className="list-disc list-inside text-white/70 space-y-1">
+                <li><span className="text-white font-bold">原影片連結</span> — 回去看原本的影片</li>
+                <li><span className="text-white font-bold">匯出 .txt</span> — 下載完整分析+腳本的文字檔（Pro 以上）</li>
+                <li><span className="text-white font-bold">加入靈感簿</span> — 收藏起來方便之後找</li>
+                <li><span className="text-white font-bold">一鍵複製全部標題</span> — 複製所有生成標題到剪貼簿（Pro 以上）</li>
+              </ul>
+            </StepCard>
+          </>
+        )}
+
+        {/* ===== 爆款延伸 ===== */}
+        {tab === "extend" && (
+          <>
+            <StepCard num={1} title="什麼是「爆款延伸」？">
+              <p>同一支爆款影片，AI 幫你想出 <span className="text-white font-bold">3 個不同切入角度</span>。</p>
+              <p>例如同一個主題，可以變成「省錢版」「懶人版」「專業版」三支不同的片。</p>
+            </StepCard>
+
+            <StepCard num={2} title="生成延伸角度">
+              <p>在爆款資料庫的每支影片卡片裡，往下滑找到 <span className="text-red-400 font-bold">「爆款延伸」</span> 區塊：</p>
+              <MockUI>
+                <div className="space-y-3">
+                  <div className="text-red-400 font-bold text-sm">爆款延伸</div>
+                  <div className="text-white/50 text-xs">先生成 3 個延伸角度與 Hook，再選擇要不要生成完整腳本</div>
+                  <div className="text-center space-y-2">
+                    <Arrow label="按這裡生成 3 個角度" dir="down" />
+                    <div className="inline-block px-5 py-2.5 rounded-lg bg-blue-600 text-white font-bold text-sm">
+                      生成 3 個爆款延伸
+                    </div>
+                  </div>
+                </div>
+              </MockUI>
+            </StepCard>
+
+            <StepCard num={3} title="從角度生成完整腳本" tip="免費方案無法用延伸腳本。Creator 每支影片 1 個，Pro/旗艦每支 3 個。">
+              <p>生成角度後，每個角度下面會有一個按鈕：</p>
+              <MockUI>
+                <div className="space-y-2">
+                  <div className="text-white font-bold text-sm">角度 1：省錢版切入</div>
+                  <div className="text-white/60 text-sm">Hook：「你每天花的這筆錢，其實可以省下來...」</div>
+                  <div className="text-center">
+                    <Arrow label="從這個角度生成完整腳本" dir="down" />
+                  </div>
+                  <div className="inline-block px-4 py-2 rounded-lg bg-white/10 border border-white/20 text-white text-sm">
+                    生成延伸腳本
+                  </div>
+                </div>
+              </MockUI>
+            </StepCard>
+          </>
+        )}
+
+        {/* ===== 方案 / 帳單 ===== */}
+        {tab === "plans" && (
+          <>
+            <StepCard num={1} title="查看方案差異">
+              <p>點導覽列的 <span className="text-red-400 font-bold">「方案」</span>，可以看到所有方案的功能比較：</p>
+              <MockUI>
+                <div className="overflow-x-auto">
+                  <table className="w-full text-xs text-center">
+                    <thead>
+                      <tr className="text-white/50">
+                        <td className="p-2 text-left">項目</td>
+                        <td className="p-2">免費</td>
+                        <td className="p-2 text-red-300">Creator</td>
+                        <td className="p-2">專業版</td>
+                        <td className="p-2">旗艦版</td>
+                      </tr>
+                    </thead>
+                    <tbody className="text-white/70">
+                      <tr className="border-t border-white/5">
+                        <td className="p-2 text-left">分析+生成/週期</td>
+                        <td className="p-2">3+3</td>
+                        <td className="p-2">50+50</td>
+                        <td className="p-2">200+200</td>
+                        <td className="p-2">500+500</td>
+                      </tr>
+                      <tr className="border-t border-white/5">
+                        <td className="p-2 text-left">延伸腳本數</td>
+                        <td className="p-2">0</td>
+                        <td className="p-2">1</td>
+                        <td className="p-2">3</td>
+                        <td className="p-2">3</td>
+                      </tr>
+                    </tbody>
+                  </table>
+                </div>
+              </MockUI>
+            </StepCard>
+
+            <StepCard num={2} title="升級方案">
+              <MockUI>
+                <div className="flex gap-2 justify-center flex-wrap">
+                  <span className="px-3 py-1.5 rounded-lg bg-red-500 text-white text-xs font-bold">月繳</span>
+                  <span className="px-3 py-1.5 rounded-lg bg-white/10 text-white/60 text-xs">季繳 <span className="text-green-400">省10%</span></span>
+                  <span className="px-3 py-1.5 rounded-lg bg-white/10 text-white/60 text-xs">半年繳 <span className="text-green-400">省15%</span></span>
+                  <span className="px-3 py-1.5 rounded-lg bg-white/10 text-white/60 text-xs">年繳 <span className="text-green-400">省20%</span></span>
+                </div>
+                <div className="text-center pt-2">
+                  <Arrow label="選好週期後，在想要的方案按「升級」" dir="down" />
+                </div>
+              </MockUI>
+              <p>系統會引導你到綠界金流付款。付完款後方案立即生效。</p>
+              <p className="text-white/60">升級差額計算：目標方案原價 - 目前已付款金額 = 你要補的差額</p>
+            </StepCard>
+
+            <StepCard num={3} title="查看帳單">
+              <p>點導覽列的 <span className="text-red-400 font-bold">「帳單」</span>：</p>
+              <MockUI>
+                <div className="space-y-3">
+                  <div className="flex justify-between">
                     <div>
-                      <Link href="#upload-files" className="text-[#93c5fd] underline text-sm">
-                        查看壓縮影片教學
-                      </Link>
+                      <div className="text-white/50 text-xs">目前方案</div>
+                      <div className="text-white font-bold">專業版方案</div>
+                      <div className="text-white/40 text-xs">NT$1,599 / 月</div>
+                    </div>
+                    <Arrow label="目前訂閱狀態" dir="left" />
+                  </div>
+                  <div className="grid grid-cols-2 gap-2">
+                    <div className="rounded-lg bg-white/5 p-3">
+                      <div className="text-white/40 text-xs">爆款分析</div>
+                      <Arrow label="已用/總量" dir="right" />
+                      <div className="text-white font-bold">2 / 200</div>
+                    </div>
+                    <div className="rounded-lg bg-white/5 p-3">
+                      <div className="text-white/40 text-xs">內容生成</div>
+                      <div className="text-white font-bold">1 / 200</div>
                     </div>
                   </div>
                 </div>
-              </div>
-            ) : null}
+              </MockUI>
+              <p>往下還有 <span className="text-white font-bold">付款記錄</span>，可以看到每筆付款的金額和狀態。</p>
+            </StepCard>
+          </>
+        )}
 
-            {activeTab === "generate" ? (
-              <div className="space-y-4">
-                <div>
-                  <h2 className="text-xl font-black text-white mb-2">{stepMeta.generate?.title}</h2>
-                  <p className="text-white/60 text-sm leading-relaxed">
-                    {stepMeta.generate?.desc ??
-                      "分析完成後，填「行業」與「你的主題」，按下「生成腳本與標題」即可得到多版本腳本與標題。"}
-                  </p>
-                </div>
+        {/* ===== 設定 ===== */}
+        {tab === "settings" && (
+          <>
+            <StepCard num={1} title="進入個人設定">
+              <p>點導覽列的 <span className="text-red-400 font-bold">「設定」</span>。</p>
+            </StepCard>
 
+            <StepCard num={2} title="修改你的資料">
+              <MockUI>
                 <div className="space-y-3">
-                  <div className="text-sm font-bold text-white/80">你要做的 3 件事</div>
-                  <ol className="space-y-2 text-white/85 text-sm leading-relaxed">
-                    <li>1. 找到「生成腳本与标题」區塊。</li>
-                    <li>2. 選行業 + 寫一句「你的主題/主角」。</li>
-                    <li>3. 按「生成脚本与标题」，挑喜歡的版本保存/複製。</li>
-                  </ol>
+                  <div className="grid grid-cols-2 gap-3">
+                    <div>
+                      <div className="text-white/50 text-xs mb-1">Email</div>
+                      <div className="h-9 rounded-lg bg-white/10 border border-white/20 flex items-center px-3 text-white/50 text-sm">
+                        你的@email.com
+                      </div>
+                    </div>
+                    <div>
+                      <div className="flex items-center gap-1 mb-1">
+                        <Arrow label="可以改" dir="right" />
+                        <span className="text-white/50 text-xs">名稱</span>
+                      </div>
+                      <div className="h-9 rounded-lg bg-white/10 border border-white/20 flex items-center px-3 text-white/70 text-sm">
+                        你的名稱
+                      </div>
+                    </div>
+                  </div>
+                  <div>
+                    <div className="flex items-center gap-1 mb-1">
+                      <Arrow label="可以改" dir="right" />
+                      <span className="text-white/50 text-xs">Instagram 帳號</span>
+                    </div>
+                    <div className="h-9 rounded-lg bg-white/10 border border-white/20 flex items-center px-3 text-white/70 text-sm">
+                      @ 你的IG帳號
+                    </div>
+                  </div>
+                  <div className="text-center">
+                    <Arrow label="改完按這裡儲存" dir="down" />
+                  </div>
+                  <div className="inline-block px-5 py-2 rounded-lg bg-red-500 text-white font-bold text-sm">
+                    儲存設定
+                  </div>
                 </div>
+              </MockUI>
+              <p className="text-white/60">Email 目前無法自行修改（綁定帳號用），其他欄位可以自由更改。</p>
+            </StepCard>
+          </>
+        )}
 
-                <div className="rounded-xl bg-amber-500/10 border border-amber-500/20 p-4">
-                  <div className="text-xs font-bold text-amber-300/90 mb-1">小提醒</div>
-                  <p className="text-white/80 text-sm leading-relaxed">
-                    如果你要我補「生成頁」的紅色箭頭教學圖，請再提供那一頁的截圖（包含「生成脚本与标题」按鈕）。
-                  </p>
-                </div>
-              </div>
-            ) : null}
-
-            {activeTab === "database" ? (
-              <div className="space-y-4">
-                <div>
-                  <h2 className="text-xl font-black text-white mb-2">{stepMeta.database?.title}</h2>
-                  <p className="text-white/60 text-sm leading-relaxed">
-                    {stepMeta.database?.desc ?? "你分析/保存過的影片，都會在這裡集中管理。"}
-                  </p>
-                </div>
-
-                <img src={databaseImg} alt="爆款資料庫教學截圖" style={{ width: "100%", borderRadius: 12 }} />
-
-                <ol className="space-y-2 text-white/85 text-sm leading-relaxed">
-                  <li>1. 用搜尋框找主題、Hook、痛點或標題關鍵字。</li>
-                  <li>2. 喜歡就按「加入靈感簿」，之後直接回靈感簿找。</li>
-                  <li>3. Pro/旗艦可用匯出或一鍵複製標題，節省整理時間。</li>
-                </ol>
-              </div>
-            ) : null}
-
-            {activeTab === "angles" ? (
-              <div className="space-y-4">
-                <div>
-                  <h2 className="text-xl font-black text-white mb-2">{stepMeta.angles?.title}</h2>
-                  <p className="text-white/60 text-sm leading-relaxed">
-                    {stepMeta.angles?.desc ?? "想拍不同切入點時，用延伸角度快速拿到不同 Hook 與腳本。"}
-                  </p>
-                </div>
-
-                <img src={anglesImg} alt="爆款延伸角度教學截圖" style={{ width: "100%", borderRadius: 12 }} />
-
-                <ol className="space-y-2 text-white/85 text-sm leading-relaxed">
-                  <li>1. 在影片卡片內找到「爆款延伸」。</li>
-                  <li>2. 尚未延伸就按生成，系統會給多個角度。</li>
-                  <li>3. 每個角度可再按「生成延伸腳本」。</li>
-                </ol>
-              </div>
-            ) : null}
-
-            {activeTab === "plans" ? (
-              <div className="space-y-4">
-                <div>
-                  <h2 className="text-xl font-black text-white mb-2">{stepMeta.plans?.title}</h2>
-                  <p className="text-white/60 text-sm leading-relaxed">
-                    {stepMeta.plans?.desc ?? "用這裡確認你目前方案、剩餘額度，以及到期日。"}
-                  </p>
-                </div>
-
-                <img src={plansImg} alt="方案教學截圖" style={{ width: "100%", borderRadius: 12 }} />
-
-                <ol className="space-y-2 text-white/85 text-sm leading-relaxed">
-                  <li>1. 去「方案」選更高方案並按升級/订阅。</li>
-                  <li>2. 去「帳單」查看本期剩餘次數與到期日。</li>
-                  <li>3. 升級中使用者可看到額度延續邏輯（依有效期）。</li>
-                </ol>
-              </div>
-            ) : null}
+        {/* ─── 底部 CTA ─── */}
+        <div className="pt-8 border-t border-white/10">
+          <div className="text-center space-y-4">
+            <p className="text-white/50">看完了？開始試試看吧！</p>
+            <div className="flex gap-3 justify-center flex-wrap">
+              <Link
+                href="/register"
+                className="px-6 py-3 rounded-xl bg-red-500 hover:bg-red-600 text-white font-bold text-sm transition"
+              >
+                免費試用 3 次
+              </Link>
+              <Link
+                href="/analyze"
+                className="px-6 py-3 rounded-xl bg-white/5 hover:bg-white/10 border border-white/10 text-white font-medium text-sm transition"
+              >
+                前往爆款分析
+              </Link>
+            </div>
           </div>
         </div>
-      </section>
+      </main>
 
-      <section className="py-12 px-6 border-t border-white/5">
-        <div className="max-w-3xl mx-auto flex flex-col sm:flex-row items-center justify-center gap-4">
-          <Link
-            href="/register"
-            className="w-full sm:w-auto bg-brand-500 hover:bg-brand-400 text-white px-8 py-4 rounded-xl font-bold text-center transition-all"
-          >
-            免費試用 3 次
-          </Link>
-          <Link
-            href="/success-cases"
-            className="w-full sm:w-auto bg-white/5 hover:bg-white/10 border border-white/10 text-white px-8 py-4 rounded-xl font-medium text-center transition-colors"
-          >
-            看爆款成功案例
-          </Link>
-        </div>
-      </section>
-
-      <footer className="border-t border-white/5 py-8 px-6">
-        <div className="max-w-7xl mx-auto flex flex-col md:flex-row items-center justify-between gap-4">
-          <Link href="/" className="flex items-center gap-2">
-            <div className="w-6 h-6 rounded-md bg-brand-500 flex items-center justify-center text-white font-black text-xs">
-              H
-            </div>
-            <span className="font-bold">Hookvox</span>
-          </Link>
-          <div className="flex flex-wrap gap-6 text-sm text-white/40">
-            <Link href="/" className="hover:text-white transition-colors">首頁</Link>
-            <Link href="/success-cases" className="hover:text-white transition-colors">成功案例</Link>
-            <Link href="/plans" className="hover:text-white transition-colors">方案</Link>
-            <Link href="/terms" className="hover:text-white transition-colors">服務條款</Link>
-            <Link href="/privacy" className="hover:text-white transition-colors">隱私權政策</Link>
-            <Link href="/refund" className="hover:text-white transition-colors">退款政策</Link>
-            <Link href="/contact" className="hover:text-white transition-colors">聯繫我們</Link>
+      {/* ─── Footer ─── */}
+      <footer className="border-t border-white/10 py-6 mt-12">
+        <div className="max-w-5xl mx-auto px-6 flex flex-col md:flex-row items-center justify-between gap-3 text-xs text-white/30">
+          <span>© 2026 Hookvox — by 金孫</span>
+          <div className="flex gap-4">
+            <Link href="/terms" className="hover:text-white/60 transition">服務條款</Link>
+            <Link href="/privacy" className="hover:text-white/60 transition">隱私權政策</Link>
+            <Link href="/refund" className="hover:text-white/60 transition">退款政策</Link>
+            <Link href="/contact" className="hover:text-white/60 transition">聯繫我們</Link>
           </div>
         </div>
       </footer>

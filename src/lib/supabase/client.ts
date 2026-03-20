@@ -1,16 +1,11 @@
-import { createClient as createSupabaseClient, SupabaseClient } from "@supabase/supabase-js";
+// 重要：不再每次建立新 Supabase instance。
+// 之前每個頁面呼叫 createClient() 都會產生一個獨立的 Supabase client，
+// 導致多個 client 同時搶 localStorage 的 auth token，互相覆蓋造成登出。
+// 現在統一回傳 singleton，所有頁面共用同一個 auth 狀態。
+
+import { supabase } from "@/lib/supabase";
+import type { SupabaseClient } from "@supabase/supabase-js";
 
 export function createClient(): SupabaseClient {
-  const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL?.trim() || "";
-  const supabaseAnonKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY?.trim() || "";
-
-  if (!supabaseUrl || !supabaseAnonKey) {
-    console.warn("Supabase: 缺少 NEXT_PUBLIC_SUPABASE_URL 或 NEXT_PUBLIC_SUPABASE_ANON_KEY，請在 .env.local 設定");
-    return createSupabaseClient(
-      "https://placeholder.supabase.co",
-      "placeholder"
-    );
-  }
-
-  return createSupabaseClient(supabaseUrl, supabaseAnonKey);
+  return supabase;
 }

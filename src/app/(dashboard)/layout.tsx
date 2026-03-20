@@ -117,6 +117,7 @@ export default function DashboardLayout({
     { href: "/viral-db", label: "爆款資料庫" },
     { href: "/plans", label: "方案" },
     { href: "/billing", label: "帳單" },
+    { href: "/guide", label: "教學", external: true },
     { href: "/settings", label: "設定" },
   ];
 
@@ -149,12 +150,13 @@ export default function DashboardLayout({
           </Link>
 
           <nav className="hidden gap-6 md:flex items-center">
-            {navItems.map((item) => {
+            {navItems.map((item: any) => {
               const active = pathname === item.href;
               return (
                 <Link
                   key={item.href}
                   href={item.href}
+                  {...(item.external ? { target: "_blank", rel: "noopener noreferrer" } : {})}
                   className={`text-sm transition ${
                     active ? "text-red-400" : "text-white/70 hover:text-white"
                   }`}
@@ -195,10 +197,11 @@ export default function DashboardLayout({
       </header>
       {showNav ? (
         <nav className="md:hidden flex gap-4 overflow-x-auto px-6 pb-3 text-sm text-white/70">
-          {navItems.map((item) => (
+          {navItems.map((item: any) => (
             <Link
               key={item.href}
               href={item.href}
+              {...(item.external ? { target: "_blank", rel: "noopener noreferrer" } : {})}
               className={`shrink-0 transition-colors ${
                 pathname === item.href ? "text-red-400" : "hover:text-white"
               }`}
