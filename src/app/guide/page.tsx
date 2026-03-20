@@ -1,9 +1,16 @@
+"use client";
+
 import Link from "next/link";
+import { useMemo, useState } from "react";
 
 // 使用 public 內的圖片（部署到 Vercel 時不會因為本機 assets/路徑不同而失敗）
 const step1Img = "/guide-steps/step1.png";
 const step2Img = "/guide-steps/step2.png";
 const step3Img = "/guide-steps/step3.png";
+
+const databaseImg = "/guide-steps/database.png";
+const anglesImg = "/guide-steps/angles.png";
+const plansImg = "/guide-steps/plans.png";
 
 /** 每個大步驟底下拆成「連國小生都懂」的小步驟 */
 const steps = [
@@ -125,6 +132,32 @@ const steps = [
 ];
 
 export default function GuidePage() {
+  const tabs = useMemo(
+    () =>
+      [
+        { id: "analyze", label: "爆款分析" },
+        { id: "generate", label: "生成腳本與標題" },
+        { id: "database", label: "爆款資料庫" },
+        { id: "angles", label: "爆款延伸角度" },
+        { id: "plans", label: "方案/帳單" },
+      ] as const,
+    []
+  );
+
+  type TabId = (typeof tabs)[number]["id"];
+  const [activeTab, setActiveTab] = useState<TabId>(tabs[0].id);
+
+  const stepMeta = useMemo(() => {
+    const get = (id: TabId) => steps.find((s) => s.id === id);
+    return {
+      analyze: get("analyze"),
+      generate: get("generate"),
+      database: get("database"),
+      angles: get("angles"),
+      plans: get("plans"),
+    };
+  }, []);
+
   return (
     <div className="min-h-screen bg-dark-900 overflow-hidden">
       <nav className="fixed top-0 w-full z-50 border-b border-white/5 bg-dark-900/80 backdrop-blur-xl">
@@ -165,106 +198,158 @@ export default function GuidePage() {
 
       <section className="pb-24 px-6">
         <div className="max-w-3xl mx-auto space-y-14">
-          {steps.map((s, i) => (
-            <div
-              key={s.id}
-              id={s.id}
-              className="glass rounded-2xl p-8 space-y-6 scroll-mt-28"
-            >
-              <div className="flex items-start justify-between gap-4 flex-wrap">
-                <div>
-                  <h2 className="text-xl font-black text-white mb-2">{s.title}</h2>
-                  <p className="text-white/60 text-sm leading-relaxed">{s.desc}</p>
-                </div>
-                <Link
-                  href={s.href}
-                  className="shrink-0 px-4 py-2 rounded-xl bg-brand-500 hover:bg-brand-400 text-white text-sm font-bold transition-colors"
+          <div className="glass rounded-2xl p-6 space-y-6">
+            <div className="flex items-center gap-3 flex-wrap">
+              {tabs.map((t) => (
+                <button
+                  key={t.id}
+                  type="button"
+                  onClick={() => setActiveTab(t.id)}
+                  className={`px-4 py-2 rounded-xl border transition-colors text-sm font-semibold ${
+                    activeTab === t.id
+                      ? "bg-brand-500 border-brand-500 text-white"
+                      : "bg-white/5 border-white/10 text-white/60 hover:text-white hover:border-white/20"
+                  }`}
                 >
-                  {s.cta}
-                </Link>
-              </div>
+                  {t.label}
+                </button>
+              ))}
+            </div>
 
-              {s.id === "upload-files" ? (
-                <div className="space-y-6">
-                  <div className="rounded-xl border border-red-500/25 bg-red-500/10 p-5">
-                    <div className="text-red-300 font-black text-lg mb-2">規則：只上傳「24MB 以下」影片</div>
-                    <div className="text-white/80 text-sm leading-relaxed">
-                      目前轉錄服務對單檔有上限（約 25MB），所以系統用 <span className="text-red-200 font-bold">24MB</span> 作安全值，避免你上傳後在轉錄階段失敗。
-                    </div>
+            {activeTab === "analyze" ? (
+              <div id="upload-files" className="space-y-5">
+                <div>
+                  <h2 className="text-xl font-black text-white mb-2">{stepMeta.analyze?.title}</h2>
+                  <p className="text-white/60 text-sm leading-relaxed">
+                    {stepMeta.analyze?.desc ?? "先選你想學的影片，接著用系統的「開始爆款分析」把影片轉成逐字稿並分析爆款結構。"}
+                  </p>
+                </div>
+
+                <div className="rounded-xl border border-red-500/25 bg-red-500/10 p-5">
+                  <div className="text-red-300 font-black text-lg mb-2">規則：只上傳「24MB 以下」影片</div>
+                  <div className="text-white/80 text-sm leading-relaxed">
+                    目前轉錄服務單檔上限約 25MB，所以用 <span className="text-red-200 font-bold">24MB</span> 作安全值，避免上傳後才失敗。
                   </div>
+                </div>
 
-                  <div className="space-y-3">
-                    <div className="text-sm font-bold text-white/80">一鍵照做（剪映 / CapCut 壓縮）</div>
-                    <div className="rounded-xl bg-white/5 border border-white/10 p-4">
-                      <div style={{ display: "grid", gap: 16 }}>
-                        <div style={{ display: "grid", gap: 10 }}>
-                          <div className="text-white/90 font-bold text-sm">步驟 1：按「开始创作」</div>
-                          <img src={step1Img} alt="開始創作步驟" style={{ width: "100%", borderRadius: 12 }} />
-                          <div className="text-white/70 text-sm leading-relaxed">
-                            按下後進入編輯頁面，準備調輸出設定。
-                          </div>
-                        </div>
-
-                        <div style={{ display: "grid", gap: 10 }}>
-                          <div className="text-white/90 font-bold text-sm">步驟 2：上方選「1080P」</div>
-                          <img src={step2Img} alt="1080P 步驟" style={{ width: "100%", borderRadius: 12 }} />
-                          <div className="text-white/70 text-sm leading-relaxed">
-                            點到解析度選項，再往下把解析度改成 480P。
-                          </div>
-                        </div>
-
-                        <div style={{ display: "grid", gap: 10 }}>
-                          <div className="text-white/90 font-bold text-sm">
-                            步驟 3：把解析度/幀率/碼率調到最低，再直接「导出」
-                          </div>
-                          <img src={step3Img} alt="480P 24/碼率/导出 步驟" style={{ width: "100%", borderRadius: 12 }} />
-                          <div className="text-white/70 text-sm leading-relaxed">
-                            建議設定：<span className="text-white font-bold">480P</span>、<span className="text-white font-bold">24fps</span>（幀率較低）、<span className="text-white font-bold">码率较低</span>。設定好就直接按右上「导出」。
-                          </div>
-                        </div>
+                <div className="space-y-3">
+                  <div className="text-sm font-bold text-white/80">壓縮影片（剪映 / CapCut）</div>
+                  <div className="rounded-xl bg-white/5 border border-white/10 p-4 space-y-4">
+                    <div style={{ display: "grid", gap: 16 }}>
+                      <div style={{ display: "grid", gap: 10 }}>
+                        <div className="text-white/90 font-bold text-sm">步驟 1：按「开始创作」</div>
+                        <img src={step1Img} alt="開始創作步驟" style={{ width: "100%", borderRadius: 12 }} />
+                      </div>
+                      <div style={{ display: "grid", gap: 10 }}>
+                        <div className="text-white/90 font-bold text-sm">步驟 2：上方選「1080P」</div>
+                        <img src={step2Img} alt="1080P 步驟" style={{ width: "100%", borderRadius: 12 }} />
+                      </div>
+                      <div style={{ display: "grid", gap: 10 }}>
+                        <div className="text-white/90 font-bold text-sm">步驟 3：480P + 24fps + 較低码率 → 导出</div>
+                        <img src={step3Img} alt="480P 24fps 导出 步驟" style={{ width: "100%", borderRadius: 12 }} />
                       </div>
                     </div>
-                  </div>
 
-                  <div className="rounded-xl bg-amber-500/10 border border-amber-500/20 p-4">
-                    <div className="text-xs font-bold text-amber-300/90 mb-2">合法合規提醒</div>
-                    <div className="text-white/80 text-sm leading-relaxed">
-                      請只使用你自己拍攝的原檔，或你已取得授權/可合法取得的影片素材。若創作者關閉下載，請不要嘗試繞過限制；正確作法是直接向原作者/團隊索取原檔與授權。
+                    <div className="text-white/70 text-sm leading-relaxed">
+                      壓縮後請確認檔案大小 <span className="text-white font-bold">小於 24MB</span> 再上傳。
+                      若還是超過：再縮短片長或把輸出參數往更低一點。
+                    </div>
+
+                    <div>
+                      <Link href="#upload-files" className="text-[#93c5fd] underline text-sm">
+                        查看壓縮影片教學
+                      </Link>
                     </div>
                   </div>
-
-                  <div className="text-white/70 text-sm leading-relaxed">
-                    壓縮後請確認檔案大小 <span className="text-white font-bold">小於 24MB</span> 再上傳。
-                    若還是超過：再縮短片長（例如只截需要分析的 30～60 秒）或把輸出參數再往更低一點。
-                  </div>
                 </div>
-              ) : (
-                <div className="space-y-4">
-                  <div className="text-sm font-bold text-white/80">具體怎麼做：</div>
-                  <ol className="space-y-3">
-                    {s.detail.map((item, j) => (
-                      <li
-                        key={j}
-                        className="flex gap-3 text-white/85 text-sm leading-relaxed"
-                      >
-                        <span className="shrink-0 w-6 h-6 rounded-full bg-brand-500/25 text-brand-300 text-xs font-bold flex items-center justify-center">
-                          {j + 1}
-                        </span>
-                        <span>{item}</span>
-                      </li>
-                    ))}
+              </div>
+            ) : null}
+
+            {activeTab === "generate" ? (
+              <div className="space-y-4">
+                <div>
+                  <h2 className="text-xl font-black text-white mb-2">{stepMeta.generate?.title}</h2>
+                  <p className="text-white/60 text-sm leading-relaxed">
+                    {stepMeta.generate?.desc ??
+                      "分析完成後，填「行業」與「你的主題」，按下「生成腳本與標題」即可得到多版本腳本與標題。"}
+                  </p>
+                </div>
+
+                <div className="space-y-3">
+                  <div className="text-sm font-bold text-white/80">你要做的 3 件事</div>
+                  <ol className="space-y-2 text-white/85 text-sm leading-relaxed">
+                    <li>1. 找到「生成腳本与标题」區塊。</li>
+                    <li>2. 選行業 + 寫一句「你的主題/主角」。</li>
+                    <li>3. 按「生成脚本与标题」，挑喜歡的版本保存/複製。</li>
                   </ol>
                 </div>
-              )}
 
-              {s.tip && (
                 <div className="rounded-xl bg-amber-500/10 border border-amber-500/20 p-4">
-                  <div className="text-xs font-bold text-amber-300/90 mb-1">💡 小提醒</div>
-                  <p className="text-white/80 text-sm leading-relaxed">{s.tip}</p>
+                  <div className="text-xs font-bold text-amber-300/90 mb-1">小提醒</div>
+                  <p className="text-white/80 text-sm leading-relaxed">
+                    如果你要我補「生成頁」的紅色箭頭教學圖，請再提供那一頁的截圖（包含「生成脚本与标题」按鈕）。
+                  </p>
                 </div>
-              )}
-            </div>
-          ))}
+              </div>
+            ) : null}
+
+            {activeTab === "database" ? (
+              <div className="space-y-4">
+                <div>
+                  <h2 className="text-xl font-black text-white mb-2">{stepMeta.database?.title}</h2>
+                  <p className="text-white/60 text-sm leading-relaxed">
+                    {stepMeta.database?.desc ?? "你分析/保存過的影片，都會在這裡集中管理。"}
+                  </p>
+                </div>
+
+                <img src={databaseImg} alt="爆款資料庫教學截圖" style={{ width: "100%", borderRadius: 12 }} />
+
+                <ol className="space-y-2 text-white/85 text-sm leading-relaxed">
+                  <li>1. 用搜尋框找主題、Hook、痛點或標題關鍵字。</li>
+                  <li>2. 喜歡就按「加入靈感簿」，之後直接回靈感簿找。</li>
+                  <li>3. Pro/旗艦可用匯出或一鍵複製標題，節省整理時間。</li>
+                </ol>
+              </div>
+            ) : null}
+
+            {activeTab === "angles" ? (
+              <div className="space-y-4">
+                <div>
+                  <h2 className="text-xl font-black text-white mb-2">{stepMeta.angles?.title}</h2>
+                  <p className="text-white/60 text-sm leading-relaxed">
+                    {stepMeta.angles?.desc ?? "想拍不同切入點時，用延伸角度快速拿到不同 Hook 與腳本。"}
+                  </p>
+                </div>
+
+                <img src={anglesImg} alt="爆款延伸角度教學截圖" style={{ width: "100%", borderRadius: 12 }} />
+
+                <ol className="space-y-2 text-white/85 text-sm leading-relaxed">
+                  <li>1. 在影片卡片內找到「爆款延伸」。</li>
+                  <li>2. 尚未延伸就按生成，系統會給多個角度。</li>
+                  <li>3. 每個角度可再按「生成延伸腳本」。</li>
+                </ol>
+              </div>
+            ) : null}
+
+            {activeTab === "plans" ? (
+              <div className="space-y-4">
+                <div>
+                  <h2 className="text-xl font-black text-white mb-2">{stepMeta.plans?.title}</h2>
+                  <p className="text-white/60 text-sm leading-relaxed">
+                    {stepMeta.plans?.desc ?? "用這裡確認你目前方案、剩餘額度，以及到期日。"}
+                  </p>
+                </div>
+
+                <img src={plansImg} alt="方案教學截圖" style={{ width: "100%", borderRadius: 12 }} />
+
+                <ol className="space-y-2 text-white/85 text-sm leading-relaxed">
+                  <li>1. 去「方案」選更高方案並按升級/订阅。</li>
+                  <li>2. 去「帳單」查看本期剩餘次數與到期日。</li>
+                  <li>3. 升級中使用者可看到額度延續邏輯（依有效期）。</li>
+                </ol>
+              </div>
+            ) : null}
+          </div>
         </div>
       </section>
 
