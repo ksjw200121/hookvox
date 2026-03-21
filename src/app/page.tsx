@@ -1,56 +1,5 @@
-"use client";
-
 import Link from "next/link";
-import { useEffect, useRef, useState } from "react";
-
-/* ---------- Scroll Reveal Hook ---------- */
-function useReveal() {
-  const ref = useRef<HTMLDivElement>(null);
-  const [visible, setVisible] = useState(false);
-
-  useEffect(() => {
-    const el = ref.current;
-    if (!el) return;
-    const observer = new IntersectionObserver(
-      ([entry]) => {
-        if (entry.isIntersecting) {
-          setVisible(true);
-          observer.unobserve(el);
-        }
-      },
-      { threshold: 0.15 }
-    );
-    observer.observe(el);
-    return () => observer.disconnect();
-  }, []);
-
-  return { ref, visible };
-}
-
-function Reveal({
-  children,
-  className = "",
-  delay = 0,
-}: {
-  children: React.ReactNode;
-  className?: string;
-  delay?: number;
-}) {
-  const { ref, visible } = useReveal();
-  return (
-    <div
-      ref={ref}
-      className={className}
-      style={{
-        opacity: visible ? 1 : 0,
-        transform: visible ? "translateY(0)" : "translateY(32px)",
-        transition: `opacity 0.7s ease ${delay}ms, transform 0.7s ease ${delay}ms`,
-      }}
-    >
-      {children}
-    </div>
-  );
-}
+import { Reveal } from "@/components/Reveal";
 
 /* ---------- Types ---------- */
 type PricingCard = {
@@ -65,53 +14,53 @@ type PricingCard = {
   originalPrice?: string;
 };
 
-/* ---------- Page ---------- */
-export default function HomePage() {
-  const pricingCards: PricingCard[] = [
-    {
-      name: "免費試用",
-      price: "NT$0",
-      period: "",
-      tag: "",
-      features: [
-        "3 次分析 + 3 次生成",
-        "完整功能試用",
-        "腳本 + 標題 + 分鏡",
-        "不需信用卡",
-      ],
-      cta: "免費開始",
-      highlight: false,
-    },
-    {
-      name: "Creator",
-      price: "NT$699",
-      period: "/月",
-      tag: "最多人選",
-      features: [
-        "50 次分析 + 50 次生成 / 週期",
-        "腳本 + 標題 + 分鏡",
-        "爆款資料庫",
-        "每支影片可生成 1 個延伸腳本",
-      ],
-      cta: "立即升級",
-      highlight: true,
-    },
-    {
-      name: "專業版",
-      price: "NT$1,599",
-      period: "/月",
-      tag: "重度使用者",
-      features: [
-        "200 次分析 + 200 次生成 / 週期",
-        "腳本 + 標題 + 分鏡",
-        "爆款資料庫",
-        "每支影片可生成 3 個延伸腳本、一鍵複製標題",
-      ],
-      cta: "升級專業版",
-      highlight: false,
-    },
-  ];
+const pricingCards: PricingCard[] = [
+  {
+    name: "免費試用",
+    price: "NT$0",
+    period: "",
+    tag: "",
+    features: [
+      "3 次分析 + 3 次生成",
+      "完整功能試用",
+      "腳本 + 標題 + 分鏡",
+      "不需信用卡",
+    ],
+    cta: "免費開始",
+    highlight: false,
+  },
+  {
+    name: "Creator",
+    price: "NT$699",
+    period: "/月",
+    tag: "最多人選",
+    features: [
+      "50 次分析 + 50 次生成 / 週期",
+      "腳本 + 標題 + 分鏡",
+      "爆款資料庫",
+      "每支影片可生成 1 個延伸腳本",
+    ],
+    cta: "立即升級",
+    highlight: true,
+  },
+  {
+    name: "專業版",
+    price: "NT$1,599",
+    period: "/月",
+    tag: "重度使用者",
+    features: [
+      "200 次分析 + 200 次生成 / 週期",
+      "腳本 + 標題 + 分鏡",
+      "爆款資料庫",
+      "每支影片可生成 3 個延伸腳本、一鍵複製標題",
+    ],
+    cta: "升級專業版",
+    highlight: false,
+  },
+];
 
+/* ---------- Page (Server Component for SEO) ---------- */
+export default function HomePage() {
   return (
     <div className="min-h-screen bg-dark-900 overflow-hidden">
       <nav className="fixed top-0 w-full z-50 border-b border-white/5 bg-dark-900/80 backdrop-blur-xl">
