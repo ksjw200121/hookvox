@@ -1,5 +1,6 @@
 import Link from "next/link";
 import { Reveal } from "@/components/Reveal";
+import { FAQ } from "@/components/FAQ";
 
 /* ---------- Types ---------- */
 type PricingCard = {
@@ -58,6 +59,51 @@ const pricingCards: PricingCard[] = [
     highlight: false,
   },
 ];
+
+/* ---------- FAQ Data ---------- */
+const faqItems = [
+  { q: "免費試用需要信用卡嗎？", a: "完全不需要！註冊後立即獲得 3 次分析 + 3 次生成額度，不用綁定任何付款方式。" },
+  { q: "支援哪些平台的影片？", a: "目前支援 Instagram Reels、TikTok、YouTube Shorts。你也可以直接上傳手機錄的影片檔案（.mp4、.mov）。" },
+  { q: "生成的腳本可以商用嗎？", a: "可以！所有透過 Hookvox 生成的腳本、標題、分鏡內容，你都擁有完整的使用權，商用、個人使用都沒問題。" },
+  { q: "可以隨時取消訂閱嗎？", a: "可以，隨時到設定頁面取消訂閱，取消後在當期結束前仍可繼續使用。不會有任何額外收費。" },
+  { q: "手機可以用嗎？", a: "可以！Hookvox 完全支援手機瀏覽器操作，隨時隨地都能分析爆款、生成腳本。" },
+  { q: "多久可以拿到腳本？", a: "從貼上網址到拿到完整腳本 + 標題 + 分鏡，最快 3 分鐘內完成。" },
+];
+
+/* ---------- Testimonials Data ---------- */
+const testimonials = [
+  {
+    name: "小美",
+    industry: "美業經營者",
+    avatar: "M",
+    quote: "以前寫一支腳本要花半天，現在 3 分鐘就搞定，而且拍出來的觀看數是以前的 10 倍！",
+    stat: "觀看數成長 10x",
+  },
+  {
+    name: "阿凱",
+    industry: "健身教練",
+    avatar: "K",
+    quote: "我不擅長寫文案，但 Hookvox 幫我拆解爆款的邏輯，照著結構拍就對了，粉絲從 2000 漲到 1.2 萬。",
+    stat: "粉絲成長 6x",
+  },
+  {
+    name: "Emily",
+    industry: "食譜創作者",
+    avatar: "E",
+    quote: "分鏡表超實用！以前拍片不知道怎麼切畫面，現在照著分鏡表一步步拍，效率高很多。",
+    stat: "產出效率提升 5x",
+  },
+  {
+    name: "Jason",
+    industry: "房仲業務",
+    avatar: "J",
+    quote: "我用 Hookvox 分析同行的爆款再套用到我的物件，第一支影片就破萬觀看，直接帶來 3 組客戶。",
+    stat: "單支影片破萬觀看",
+  },
+];
+
+/* ---------- Show demo video? (set NEXT_PUBLIC_DEMO_VIDEO_URL env to enable) ---------- */
+const demoVideoUrl = process.env.NEXT_PUBLIC_DEMO_VIDEO_URL || "";
 
 /* ---------- Page (Server Component for SEO) ---------- */
 export default function HomePage() {
@@ -130,11 +176,55 @@ export default function HomePage() {
             </Link>
           </div>
 
-          <p className="text-sm text-white/30 mt-4">
-            現在可先瀏覽功能頁面，真正使用時再註冊即可
-          </p>
+          {/* Trust Badges */}
+          <div className="flex flex-wrap items-center justify-center gap-4 sm:gap-6 mt-6 text-sm text-white/50">
+            <span className="flex items-center gap-1.5"><span className="text-green-400">✓</span> 免費試用 3 次</span>
+            <span className="flex items-center gap-1.5"><span className="text-green-400">✓</span> 不需信用卡</span>
+            <span className="flex items-center gap-1.5"><span className="text-green-400">✓</span> 台灣團隊開發</span>
+            <span className="flex items-center gap-1.5"><span className="text-green-400">✓</span> 資料安全加密</span>
+          </div>
         </Reveal>
       </section>
+
+      {/* Stats */}
+      <section className="py-12 px-6 border-y border-white/5">
+        <Reveal className="max-w-4xl mx-auto">
+          <div className="grid grid-cols-3 gap-6 text-center">
+            <div>
+              <div className="text-3xl md:text-4xl font-black text-brand-400">3 分鐘</div>
+              <div className="text-white/40 text-sm mt-1">從爆款到你的腳本</div>
+            </div>
+            <div>
+              <div className="text-3xl md:text-4xl font-black text-brand-400">3 種</div>
+              <div className="text-white/40 text-sm mt-1">不同風格腳本一次給</div>
+            </div>
+            <div>
+              <div className="text-3xl md:text-4xl font-black text-brand-400">8 個</div>
+              <div className="text-white/40 text-sm mt-1">爆款標題同時生成</div>
+            </div>
+          </div>
+        </Reveal>
+      </section>
+
+      {/* Demo Video (hidden until NEXT_PUBLIC_DEMO_VIDEO_URL is set) */}
+      {demoVideoUrl && (
+        <section className="py-20 px-6 relative">
+          <div className="absolute inset-0 bg-gradient-to-b from-brand-500/5 via-transparent to-transparent pointer-events-none" />
+          <Reveal className="max-w-4xl mx-auto text-center relative">
+            <h2 className="text-3xl font-black mb-2">30 秒看懂 Hookvox</h2>
+            <p className="text-white/40 mb-8">看完你就知道為什麼創作者都在用</p>
+            <div className="relative rounded-2xl overflow-hidden border border-white/10 aspect-video bg-dark-800">
+              <iframe
+                src={demoVideoUrl}
+                title="Hookvox 產品介紹"
+                className="absolute inset-0 w-full h-full"
+                allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture"
+                allowFullScreen
+              />
+            </div>
+          </Reveal>
+        </section>
+      )}
 
       {/* Features */}
       <section className="py-20 px-6">
@@ -165,8 +255,72 @@ export default function HomePage() {
         </div>
       </section>
 
-      {/* Target Audience */}
+      {/* Before / After */}
       <section className="py-20 px-6 bg-dark-800/50">
+        <Reveal className="max-w-4xl mx-auto text-center">
+          <h2 className="text-4xl font-black mb-4">使用前 vs 使用後</h2>
+          <p className="text-white/40 mb-12">同樣的創作者，不同的結果</p>
+
+          <div className="grid md:grid-cols-2 gap-6">
+            {/* Before */}
+            <Reveal delay={0}>
+              <div className="rounded-2xl p-8 border-2 border-red-500/30 bg-red-500/5 h-full">
+                <div className="text-red-400 font-bold text-lg mb-6 flex items-center justify-center gap-2">
+                  <span className="text-2xl">😩</span> 使用前
+                </div>
+                <ul className="space-y-4 text-left">
+                  <li className="flex items-start gap-3 text-white/60 text-sm">
+                    <span className="text-red-400 mt-0.5">✗</span>
+                    <span>花 3 小時寫腳本，拍出來只有 200 觀看</span>
+                  </li>
+                  <li className="flex items-start gap-3 text-white/60 text-sm">
+                    <span className="text-red-400 mt-0.5">✗</span>
+                    <span>看到別人爆紅，不知道為什麼紅</span>
+                  </li>
+                  <li className="flex items-start gap-3 text-white/60 text-sm">
+                    <span className="text-red-400 mt-0.5">✗</span>
+                    <span>每次開頭都不知道怎麼 Hook 觀眾</span>
+                  </li>
+                  <li className="flex items-start gap-3 text-white/60 text-sm">
+                    <span className="text-red-400 mt-0.5">✗</span>
+                    <span>拍片不知道怎麼切畫面和分鏡</span>
+                  </li>
+                </ul>
+              </div>
+            </Reveal>
+
+            {/* After */}
+            <Reveal delay={150}>
+              <div className="rounded-2xl p-8 border-2 border-green-500/30 bg-green-500/5 h-full">
+                <div className="text-green-400 font-bold text-lg mb-6 flex items-center justify-center gap-2">
+                  <span className="text-2xl">🚀</span> 使用後
+                </div>
+                <ul className="space-y-4 text-left">
+                  <li className="flex items-start gap-3 text-white/60 text-sm">
+                    <span className="text-green-400 mt-0.5">✓</span>
+                    <span>3 分鐘套用爆款公式，同樣主題 2 萬觀看</span>
+                  </li>
+                  <li className="flex items-start gap-3 text-white/60 text-sm">
+                    <span className="text-green-400 mt-0.5">✓</span>
+                    <span>AI 幫你拆解每支爆款的 Hook、情緒、結構</span>
+                  </li>
+                  <li className="flex items-start gap-3 text-white/60 text-sm">
+                    <span className="text-green-400 mt-0.5">✓</span>
+                    <span>三種風格開頭任你選，每個都經過驗證</span>
+                  </li>
+                  <li className="flex items-start gap-3 text-white/60 text-sm">
+                    <span className="text-green-400 mt-0.5">✓</span>
+                    <span>自動生成分鏡表，照順序拍就好</span>
+                  </li>
+                </ul>
+              </div>
+            </Reveal>
+          </div>
+        </Reveal>
+      </section>
+
+      {/* Target Audience */}
+      <section className="py-20 px-6">
         <Reveal className="max-w-5xl mx-auto text-center">
           <h2 className="text-4xl font-black mb-4">誰適合用 Hookvox？</h2>
           <p className="text-white/40 mb-12">只要你在台灣做短影音，Hookvox 都幫你少走彎路</p>
@@ -183,6 +337,38 @@ export default function HomePage() {
             ))}
           </div>
         </Reveal>
+      </section>
+
+      {/* Testimonials */}
+      <section className="py-20 px-6 bg-dark-800/50">
+        <div className="max-w-5xl mx-auto">
+          <Reveal className="text-center mb-12">
+            <h2 className="text-4xl font-black mb-4">創作者怎麼說</h2>
+            <p className="text-white/40">來自不同行業的真實回饋</p>
+          </Reveal>
+
+          <div className="grid md:grid-cols-2 gap-6">
+            {testimonials.map((t, i) => (
+              <Reveal key={t.name} delay={i * 100}>
+                <div className="glass rounded-2xl p-6 h-full flex flex-col">
+                  <div className="flex items-center gap-3 mb-4">
+                    <div className="w-10 h-10 rounded-full bg-brand-500/20 border border-brand-500/30 flex items-center justify-center text-brand-400 font-bold text-sm">
+                      {t.avatar}
+                    </div>
+                    <div>
+                      <div className="font-semibold text-sm">{t.name}</div>
+                      <div className="text-white/40 text-xs">{t.industry}</div>
+                    </div>
+                    <div className="ml-auto bg-green-500/10 border border-green-500/20 text-green-400 text-xs font-medium px-2.5 py-1 rounded-full">
+                      {t.stat}
+                    </div>
+                  </div>
+                  <p className="text-white/60 text-sm leading-relaxed flex-1">&ldquo;{t.quote}&rdquo;</p>
+                </div>
+              </Reveal>
+            ))}
+          </div>
+        </div>
       </section>
 
       {/* Steps */}
@@ -273,6 +459,34 @@ export default function HomePage() {
             本服務為數位內容，付款後即可使用。依消費者保護法第19條，數位內容一經提供不適用鑑賞期退款。
           </p>
         </div>
+      </section>
+
+      {/* FAQ */}
+      <section className="py-20 px-6">
+        <div className="max-w-3xl mx-auto">
+          <Reveal className="text-center mb-12">
+            <h2 className="text-4xl font-black mb-4">常見問題</h2>
+            <p className="text-white/40">有任何疑問？這裡可能有你的答案</p>
+          </Reveal>
+          <Reveal delay={100}>
+            <FAQ items={faqItems} />
+          </Reveal>
+        </div>
+      </section>
+
+      {/* Final CTA */}
+      <section className="py-20 px-6 bg-dark-800/50 relative">
+        <div className="absolute inset-0 bg-gradient-to-t from-brand-500/5 via-transparent to-transparent pointer-events-none" />
+        <Reveal className="max-w-3xl mx-auto text-center relative">
+          <h2 className="text-4xl font-black mb-4">準備好讓你的影片爆紅了嗎？</h2>
+          <p className="text-white/40 mb-8">免費試用 3 次，不需信用卡，3 分鐘就能拿到你的第一個爆款腳本</p>
+          <Link
+            href="/register"
+            className="inline-block bg-brand-500 hover:bg-brand-400 text-white px-10 py-4 rounded-xl font-bold text-lg transition-all hover:scale-105 hover:shadow-[0_0_30px_rgba(255,61,48,0.4)]"
+          >
+            免費開始使用 →
+          </Link>
+        </Reveal>
       </section>
 
       {/* Footer */}
