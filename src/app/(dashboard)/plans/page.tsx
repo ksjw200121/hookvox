@@ -56,7 +56,7 @@ const FLAGSHIP = {
   cta: '升級旗艦版',
 }
 
-const EARLY_BIRD_CODE = 'JS2026'
+// 優惠碼改為伺服器端驗證，不再寫死在前端
 
 const PLAN_LEVEL: Record<string, number> = {
   FREE: 0,
@@ -159,13 +159,23 @@ export default function PlansPage() {
     }
   }, [])
 
-  const handleApplyCoupon = () => {
-    if (couponInput.trim().toUpperCase() === EARLY_BIRD_CODE) {
-      setCouponApplied(true)
-      setCouponError('')
-    } else {
-      setCouponApplied(false)
-      setCouponError('折扣碼無效，請確認後再試')
+  const handleApplyCoupon = async () => {
+    try {
+      const res = await fetch('/api/coupon/validate', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ code: couponInput.trim() }),
+      })
+      const json = await res.json()
+      if (json.valid) {
+        setCouponApplied(true)
+        setCouponError('')
+      } else {
+        setCouponApplied(false)
+        setCouponError(json.error || '折扣碼無效，請確認後再試')
+      }
+    } catch {
+      setCouponError('驗證失敗，請稍後再試')
     }
   }
 
@@ -220,7 +230,7 @@ export default function PlansPage() {
         body: JSON.stringify({
           plan: pendingPlan,
           billingCycle: billing,
-          couponCode: couponApplied ? EARLY_BIRD_CODE : null,
+          couponCode: couponApplied ? couponInput.trim().toUpperCase() : null,
         }),
       })
 

@@ -47,7 +47,7 @@ export async function PATCH(
     console.error("save viral entry error:", err);
 
     return NextResponse.json(
-      { error: err?.message || "收藏更新失敗" },
+      { error: "收藏更新失敗" },
       { status: 500 }
     );
   }

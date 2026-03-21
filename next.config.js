@@ -14,7 +14,7 @@ const nextConfig = {
       "object-src 'none'",
       "img-src 'self' data: blob: https:",
       "style-src 'self' 'unsafe-inline'",
-      "script-src 'self' 'unsafe-inline' 'unsafe-eval' https://challenges.cloudflare.com",
+      "script-src 'self' 'unsafe-inline' https://challenges.cloudflare.com",
       "frame-src https://challenges.cloudflare.com",
       "connect-src 'self' https://*.supabase.co wss://*.supabase.co https://api.openai.com https://api.anthropic.com https://vitals.vercel-insights.com https://*.ingest.sentry.io",
       "upgrade-insecure-requests",
@@ -36,7 +36,10 @@ const nextConfig = {
     ];
   },
   images: {
-    domains: ['avatars.githubusercontent.com', 'lh3.googleusercontent.com'],
+    remotePatterns: [
+      { protocol: 'https', hostname: 'avatars.githubusercontent.com' },
+      { protocol: 'https', hostname: 'lh3.googleusercontent.com' },
+    ],
   },
   // 讓 Vercel serverless function 包含 ffmpeg-static 二進位檔
   outputFileTracingIncludes: {

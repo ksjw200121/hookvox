@@ -56,7 +56,7 @@ export async function GET(
     const err = error as Error;
     console.error("admin quota adjustments list error:", err);
     return NextResponse.json(
-      { error: err?.message || "讀取額度調整失敗" },
+      { error: "讀取額度調整失敗" },
       { status: 500 }
     );
   }
@@ -148,7 +148,7 @@ export async function POST(
     const err = error as Error;
     console.error("admin create quota adjustment error:", err);
     return NextResponse.json(
-      { error: err?.message || "新增額度調整失敗" },
+      { error: "新增額度調整失敗" },
       { status: 500 }
     );
   }

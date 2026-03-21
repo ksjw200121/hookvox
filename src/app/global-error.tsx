@@ -24,7 +24,7 @@ export default function GlobalError({
         </h1>
 
         <p style={{ marginBottom: 24, color: "#ccc" }}>
-          {error?.message || "發生未知錯誤"}
+          發生未知錯誤，請重新整理頁面或稍後再試。
         </p>
 
         <button

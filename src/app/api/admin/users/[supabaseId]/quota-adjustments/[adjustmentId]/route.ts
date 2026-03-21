@@ -80,7 +80,7 @@ export async function POST(
     const err = error as Error;
     console.error("admin revoke quota adjustment error:", err);
     return NextResponse.json(
-      { error: err?.message || "撤銷額度調整失敗" },
+      { error: "撤銷額度調整失敗" },
       { status: 500 }
     );
   }

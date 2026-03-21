@@ -256,7 +256,7 @@ export async function GET(req: Request) {
     console.error("admin cost overview error:", err);
 
     return NextResponse.json(
-      { error: err?.message || "讀取管理數據失敗" },
+      { error: "讀取管理數據失敗" },
       { status: 500 }
     );
   }

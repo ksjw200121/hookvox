@@ -327,7 +327,7 @@ ${analysis?.combinedFormula || "未提供"}
     console.error("generate angles error:", err);
 
     return NextResponse.json(
-      { error: err?.message || "生成延伸角度失敗" },
+      { error: "生成延伸角度失敗" },
       { status: 500 }
     );
   }

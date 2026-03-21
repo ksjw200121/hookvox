@@ -6,33 +6,9 @@ import {
   type EcpayBillingCycle,
   type EcpayPlanName,
 } from "@/lib/ecpay-payment";
+import { generateCheckMacValue } from "@/lib/ecpay-utils";
 
 export const runtime = "nodejs";
-
-function generateCheckMacValue(params: Record<string, string>) {
-  const hashKey = process.env.ECPAY_HASH_KEY!;
-  const hashIv = process.env.ECPAY_HASH_IV!;
-
-  const sorted = Object.entries(params)
-    .filter(([key]) => key !== "CheckMacValue")
-    .sort((a, b) => a[0].localeCompare(b[0]))
-    .map(([key, value]) => `${key}=${value}`)
-    .join("&");
-
-  const raw = `HashKey=${hashKey}&${sorted}&HashIV=${hashIv}`;
-  const encoded = encodeURIComponent(raw)
-    .toLowerCase()
-    .replace(/%20/g, "+")
-    .replace(/%2d/g, "-")
-    .replace(/%5f/g, "_")
-    .replace(/%2e/g, ".")
-    .replace(/%21/g, "!")
-    .replace(/%2a/g, "*")
-    .replace(/%28/g, "(")
-    .replace(/%29/g, ")");
-
-  return crypto.createHash("sha256").update(encoded).digest("hex").toUpperCase();
-}
 
 async function logOrderResultEvent(
   supabaseAdmin: ReturnType<typeof createSupabaseAdmin>,

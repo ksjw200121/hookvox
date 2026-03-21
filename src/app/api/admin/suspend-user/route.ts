@@ -47,10 +47,25 @@ export async function POST(req: Request) {
     }
 
     const newStatus = action === "SUSPEND" ? "SUSPENDED" : "ACTIVE";
+    const oldStatus = targetUser.accountStatus;
 
     await prisma.user.update({
       where: { id: targetUser.id },
       data: { accountStatus: newStatus as any },
+    });
+
+    // 寫入 audit log
+    await prisma.adminAuditLog.create({
+      data: {
+        actorUserId: adminResult.user.id,
+        targetUserId: targetUser.id,
+        entityType: "USER",
+        entityId: targetUser.id,
+        action: action === "SUSPEND" ? "SUSPEND_USER" : "ACTIVATE_USER",
+        reason: String(body?.reason || ""),
+        beforeJson: { accountStatus: oldStatus },
+        afterJson: { accountStatus: newStatus },
+      },
     });
 
     return NextResponse.json({

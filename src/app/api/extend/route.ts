@@ -160,7 +160,7 @@ export async function POST(req: Request) {
     const err = error as Error;
     console.error("extend error:", err);
     return NextResponse.json(
-      { error: err?.message || "延伸生成失敗" },
+      { error: "延伸生成失敗" },
       { status: 500 }
     );
   }

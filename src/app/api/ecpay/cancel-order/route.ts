@@ -75,7 +75,7 @@ export async function POST(req: Request) {
     const err = error as Error;
     console.error("cancel-order error:", err);
     return NextResponse.json(
-      { error: err?.message || "取消訂單失敗" },
+      { error: "取消訂單失敗" },
       { status: 500 }
     );
   }

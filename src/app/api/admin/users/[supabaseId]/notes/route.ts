@@ -54,7 +54,7 @@ export async function GET(
     const err = error as Error;
     console.error("admin notes list error:", err);
     return NextResponse.json(
-      { error: err?.message || "讀取備註失敗" },
+      { error: "讀取備註失敗" },
       { status: 500 }
     );
   }
@@ -126,7 +126,7 @@ export async function POST(
     const err = error as Error;
     console.error("admin create note error:", err);
     return NextResponse.json(
-      { error: err?.message || "新增備註失敗" },
+      { error: "新增備註失敗" },
       { status: 500 }
     );
   }

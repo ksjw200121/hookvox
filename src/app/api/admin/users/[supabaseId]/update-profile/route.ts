@@ -99,7 +99,7 @@ export async function POST(
     const err = error as Error;
     console.error("admin update profile error:", err);
     return NextResponse.json(
-      { error: err?.message || "更新使用者資料失敗" },
+      { error: "更新使用者資料失敗" },
       { status: 500 }
     );
   }

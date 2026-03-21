@@ -1,6 +1,9 @@
 import { NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { z } from "zod";
+import { assertRateLimit, resolveClientIp } from "@/lib/security-guard";
+
+export const runtime = "nodejs";
 
 const contactSchema = z.object({
   name: z.string().min(1, "請填寫姓名").max(100),
@@ -11,6 +14,23 @@ const contactSchema = z.object({
 
 export async function POST(request: Request) {
   try {
+    // Rate limit: 每個 IP 每 10 分鐘最多 5 次
+    const ip = resolveClientIp(request);
+    const rateLimitResult = await assertRateLimit({
+      route: "contact",
+      ip,
+      userId: null,
+      windowMs: 10 * 60 * 1000,
+      maxCount: 5,
+    });
+
+    if (!rateLimitResult.allowed) {
+      return NextResponse.json(
+        { error: "送出次數過多，請稍後再試" },
+        { status: 429 }
+      );
+    }
+
     const body = await request.json();
     const parsed = contactSchema.safeParse(body);
 

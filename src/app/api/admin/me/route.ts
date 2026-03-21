@@ -27,7 +27,7 @@ export async function GET(req: Request) {
     console.error("admin me route error:", err);
 
     return NextResponse.json(
-      { error: err?.message || "讀取 admin 狀態失敗" },
+      { error: "讀取 admin 狀態失敗" },
       { status: 500 }
     );
   }

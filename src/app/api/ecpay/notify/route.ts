@@ -5,33 +5,9 @@ import {
   type EcpayBillingCycle,
   type EcpayPlanName,
 } from "@/lib/ecpay-payment";
+import { generateCheckMacValue } from "@/lib/ecpay-utils";
 
 export const runtime = "nodejs";
-
-function generateCheckMacValue(params: Record<string, string>) {
-  const hashKey = process.env.ECPAY_HASH_KEY!;
-  const hashIv = process.env.ECPAY_HASH_IV!;
-
-  const sorted = Object.entries(params)
-    .filter(([key]) => key !== "CheckMacValue")
-    .sort((a, b) => a[0].localeCompare(b[0]))
-    .map(([key, value]) => `${key}=${value}`)
-    .join("&");
-
-  const raw = `HashKey=${hashKey}&${sorted}&HashIV=${hashIv}`;
-  const encoded = encodeURIComponent(raw)
-    .toLowerCase()
-    .replace(/%20/g, "+")
-    .replace(/%2d/g, "-")
-    .replace(/%5f/g, "_")
-    .replace(/%2e/g, ".")
-    .replace(/%21/g, "!")
-    .replace(/%2a/g, "*")
-    .replace(/%28/g, "(")
-    .replace(/%29/g, ")");
-
-  return crypto.createHash("sha256").update(encoded).digest("hex").toUpperCase();
-}
 
 function resolveClientIp(req: Request) {
   const forwardedFor = req.headers.get("x-forwarded-for");
@@ -132,6 +108,23 @@ export async function POST(req: Request) {
         checkMacValid: true,
       });
       return new Response("0|缺少必要欄位", { status: 400 });
+    }
+
+    // ── 幂等性檢查：防止 ECPay 重試導致重複處理 ──
+    const { data: existingPaid } = await supabaseAdmin
+      .from("orders")
+      .select("id")
+      .eq("merchantTradeNo", merchantTradeNo)
+      .in("status", ["PAID", "SUCCESS"])
+      .limit(1);
+    if (existingPaid && existingPaid.length > 0) {
+      await logWebhookEvent(supabaseAdmin, req, body, {
+        ok: true,
+        stage: "IDEMPOTENT_SKIP",
+        message: "此訂單已處理過，跳過重複通知",
+        checkMacValid: true,
+      });
+      return new Response("1|OK");
     }
 
     if (!["CREATOR", "PRO", "FLAGSHIP"].includes(plan)) {

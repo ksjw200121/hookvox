@@ -86,7 +86,7 @@ export async function PATCH(
     const err = error as Error;
     console.error("admin update note error:", err);
     return NextResponse.json(
-      { error: err?.message || "更新備註失敗" },
+      { error: "更新備註失敗" },
       { status: 500 }
     );
   }
@@ -147,7 +147,7 @@ export async function DELETE(
     const err = error as Error;
     console.error("admin delete note error:", err);
     return NextResponse.json(
-      { error: err?.message || "刪除備註失敗" },
+      { error: "刪除備註失敗" },
       { status: 500 }
     );
   }

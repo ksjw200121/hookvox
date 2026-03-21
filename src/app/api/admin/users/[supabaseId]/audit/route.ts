@@ -57,7 +57,7 @@ export async function GET(
     const err = error as Error;
     console.error("admin audit route error:", err);
     return NextResponse.json(
-      { error: err?.message || "讀取審計紀錄失敗" },
+      { error: "讀取審計紀錄失敗" },
       { status: 500 }
     );
   }

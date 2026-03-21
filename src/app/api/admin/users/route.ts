@@ -33,7 +33,7 @@ export async function GET(req: Request) {
     const err = error as Error;
     console.error("admin users route error:", err);
     return NextResponse.json(
-      { error: err?.message || "讀取使用者清單失敗" },
+      { error: "讀取使用者清單失敗" },
       { status: 500 }
     );
   }

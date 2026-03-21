@@ -33,6 +33,7 @@ model User {
   quotaAdjustmentsTarget  ManualQuotaAdjustment[] @relation("QuotaAdjustmentTargetUser")
   quotaAdjustmentsActor   ManualQuotaAdjustment[] @relation("QuotaAdjustmentActorUser")
 
+  @@index([createdAt])
   @@map("users")
 }
 
@@ -68,6 +69,7 @@ model Content {
   user      User             @relation(fields: [userId], references: [id], onDelete: Cascade)
   scripts   Script[]
 
+  @@index([userId, createdAt])
   @@map("contents")
 }
 
@@ -109,6 +111,7 @@ model Script {
   content      Content?    @relation(fields: [contentId], references: [id])
   user         User        @relation(fields: [userId], references: [id], onDelete: Cascade)
 
+  @@index([userId, createdAt])
   @@map("scripts")
 }
 
@@ -121,6 +124,7 @@ model UsageLog {
   createdAt    DateTime @default(now())
   publicUser   User?    @relation("UsageLogPublicUser", fields: [publicUserId], references: [id], onDelete: SetNull)
 
+  @@index([publicUserId, date])
   @@map("usage_logs")
 }
 
@@ -136,6 +140,8 @@ model ViralDatabase {
   savedAt      DateTime? @db.Timestamptz(6)
   publicUser   User?     @relation("ViralDatabasePublicUser", fields: [publicUserId], references: [id], onDelete: SetNull)
 
+  @@index([publicUserId, createdAt])
+  @@index([publicUserId, videoUrl])
   @@map("viral_database")
 }
 

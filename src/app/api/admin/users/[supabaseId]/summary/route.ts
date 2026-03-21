@@ -30,7 +30,7 @@ export async function GET(
     const err = error as Error;
     console.error("admin user summary error:", err);
     return NextResponse.json(
-      { error: err?.message || "讀取使用者詳情失敗" },
+      { error: "讀取使用者詳情失敗" },
       { status: 500 }
     );
   }

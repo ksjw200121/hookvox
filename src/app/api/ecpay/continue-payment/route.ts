@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 import crypto from "crypto";
 import { createClient } from "@supabase/supabase-js";
 import { getUserIdFromRequest } from "@/lib/usage-checker";
+import { generateCheckMacValue } from "@/lib/ecpay-utils";
 
 export const runtime = "nodejs";
 
@@ -13,28 +14,6 @@ function getSupabaseAdmin() {
     process.env.NEXT_PUBLIC_SUPABASE_URL!,
     process.env.SUPABASE_SERVICE_ROLE_KEY!
   );
-}
-
-function generateCheckMacValue(params: Record<string, string>) {
-  const hashKey = process.env.ECPAY_HASH_KEY!;
-  const hashIv = process.env.ECPAY_HASH_IV!;
-  const sorted = Object.entries(params)
-    .filter(([key]) => key !== "CheckMacValue")
-    .sort((a, b) => a[0].localeCompare(b[0]))
-    .map(([key, value]) => `${key}=${value}`)
-    .join("&");
-  const raw = `HashKey=${hashKey}&${sorted}&HashIV=${hashIv}`;
-  const encoded = encodeURIComponent(raw)
-    .toLowerCase()
-    .replace(/%20/g, "+")
-    .replace(/%2d/g, "-")
-    .replace(/%5f/g, "_")
-    .replace(/%2e/g, ".")
-    .replace(/%21/g, "!")
-    .replace(/%2a/g, "*")
-    .replace(/%28/g, "(")
-    .replace(/%29/g, ")");
-  return crypto.createHash("sha256").update(encoded).digest("hex").toUpperCase();
 }
 
 function makeMerchantTradeNo(supabaseId: string) {
@@ -224,7 +203,7 @@ export async function POST(req: Request) {
     const err = error as Error;
     console.error("continue-payment error:", err);
     return NextResponse.json(
-      { error: err?.message || "取得付款頁失敗" },
+      { error: "取得付款頁失敗" },
       { status: 500 }
     );
   }

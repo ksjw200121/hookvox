@@ -297,7 +297,7 @@ export async function POST(
     const err = error as Error;
     console.error("admin subscription tools error:", err);
     return NextResponse.json(
-      { error: err?.message || "處理訂閱工具失敗" },
+      { error: "處理訂閱工具失敗" },
       { status: 500 }
     );
   }

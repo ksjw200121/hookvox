@@ -30,7 +30,7 @@ export async function GET(req: Request) {
     console.error("toggle ai GET error:", err);
 
     return NextResponse.json(
-      { error: err?.message || "讀取 AI 狀態失敗" },
+      { error: "讀取 AI 狀態失敗" },
       { status: 500 }
     );
   }
@@ -80,7 +80,7 @@ export async function POST(req: Request) {
     console.error("toggle ai POST error:", err);
 
     return NextResponse.json(
-      { error: err?.message || "切換 AI 狀態失敗" },
+      { error: "切換 AI 狀態失敗" },
       { status: 500 }
     );
   }

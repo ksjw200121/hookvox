@@ -48,7 +48,7 @@ export async function GET(
     const err = error as Error;
     console.error("admin user content error:", err);
     return NextResponse.json(
-      { error: err?.message || "讀取使用者內容失敗" },
+      { error: "讀取使用者內容失敗" },
       { status: 500 }
     );
   }

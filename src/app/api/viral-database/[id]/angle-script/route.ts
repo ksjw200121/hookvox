@@ -433,7 +433,7 @@ ${selectedAngle?.whyThisWorks || "未提供"}
     console.error("generate angle script error:", err);
 
     return NextResponse.json(
-      { error: err?.message || "生成延伸腳本失敗" },
+      { error: "生成延伸腳本失敗" },
       { status: 500 }
     );
   }
