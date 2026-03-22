@@ -3,11 +3,11 @@
   "functions": {
     "src/app/api/analyze/**": {
       "maxDuration": 300,
-      "memory": 3008
+      "memory": 1024
     },
     "src/app/api/transcribe/**": {
       "maxDuration": 300,
-      "memory": 3008
+      "memory": 1024
     },
     "src/app/api/generate/**": {
       "maxDuration": 120,
