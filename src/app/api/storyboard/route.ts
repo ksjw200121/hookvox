@@ -120,7 +120,9 @@ export async function POST(req: Request) {
 
     const response = await anthropic.messages.create({
       model: "claude-haiku-4-5-20251001",
-      max_tokens: 3000,
+      max_tokens: 4000,
+      temperature: 0.7,
+      system: [{ type: "text", text: "你是專業短影音分鏡師，擅長規劃 IG Reels / TikTok 的拍攝分鏡。你能根據腳本內容，設計出具體的畫面構圖、鏡頭運動、字幕疊加和拍攝建議，讓創作者照著拍就能出片。" }],
       messages: [{ role: "user", content: prompt }],
     });
 

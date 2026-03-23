@@ -128,6 +128,8 @@ export async function POST(req: Request) {
     const response = await anthropic.messages.create({
       model: "claude-haiku-4-5-20251001",
       max_tokens: 2000,
+      temperature: 0.7,
+      system: [{ type: "text", text: "你是台灣短影音爆款標題專家，擅長用精準的文字製造點擊衝動。你熟悉 IG Reels、TikTok、YouTube Shorts 的標題邏輯，懂得用數字、反差、痛點、問句等手法吸引目標受眾。" }],
       messages: [{ role: "user", content: prompt }],
     });
 

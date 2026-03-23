@@ -11,6 +11,7 @@ import {
   assertRateLimit,
   recordEstimatedCost,
 } from "@/lib/security-guard";
+import { sanitizeApiError } from "@/lib/api-error";
 import { getIdeaExtensionPrompt } from "@/prompts";
 import type { Industry } from "@/prompts";
 
@@ -125,6 +126,8 @@ export async function POST(req: Request) {
     const response = await anthropic.messages.create({
       model: "claude-haiku-4-5-20251001",
       max_tokens: 3000,
+      temperature: 0.7,
+      system: [{ type: "text", text: "你是短影音內容延伸專家，擅長從爆款分析中延伸出新的內容方向。你能保留原始爆款的核心公式，同時從不同角度、不同受眾、不同情境切入，產出多元且可執行的短影音企劃。" }],
       messages: [{ role: "user", content: prompt }],
     });
 
@@ -159,9 +162,7 @@ export async function POST(req: Request) {
   } catch (error: unknown) {
     const err = error as Error;
     console.error("extend error:", err);
-    return NextResponse.json(
-      { error: "延伸生成失敗" },
-      { status: 500 }
-    );
+    const { message, status } = sanitizeApiError(err);
+    return NextResponse.json({ error: message }, { status });
   }
 }
