@@ -437,7 +437,7 @@ ${
 請嚴格按照 system prompt 的 JSON 格式回傳。`;
 
     const response = await anthropic.messages.create({
-      model: "claude-sonnet-4-6-20250514",
+      model: "claude-sonnet-4-6",
       max_tokens: 8000,
       temperature: 0.7,
       system: [
