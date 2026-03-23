@@ -1049,10 +1049,10 @@ export default function AnalyzePage() {
             )}
           </StepCard>
 
-          <StepCard step={3} title="套用到我的內容（選填）" accent="#0a160a" border="#166534">
+          <StepCard step={3} title="套用到你的主題 ⭐" accent="#0a160a" border="#166534">
             <p style={{ color: "#86efac", fontSize: 13, marginBottom: 16, lineHeight: 1.6 }}>
-              分析完爆款公式後，AI 會把同樣的公式套用到你自己的主角。
-              <strong style={{ color: "#4ade80" }}> 不填就直接複製原影片的邏輯。</strong>
+              這是最重要的一步！AI 會把爆款的「公式」套用到你自己的主題上，
+              <strong style={{ color: "#4ade80" }}> 產出屬於你的原創腳本，不是抄襲原影片。</strong>
             </p>
             <FieldBlock label="你的主角是什麼？" hint={guide.substitution}>
               <input
