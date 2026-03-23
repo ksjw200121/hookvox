@@ -953,17 +953,20 @@ export default function AnalyzePage() {
           </StepCard>
 
           <StepCard step={2} title="填寫你的內容設定">
-            <p style={{ color: "#555", fontSize: 13, marginBottom: 20, lineHeight: 1.6 }}>
-              這些設定讓 AI 知道要幫你寫什麼內容。
-              <strong style={{ color: "#aaa" }}> 主題和受眾可以留空</strong>
-              ，系統會從分析結果自動帶入。
-            </p>
+            <div style={{ background: "#111", border: "1px solid #333", borderRadius: 12, padding: 14, marginBottom: 20 }}>
+              <p style={{ color: "#d4d4d4", fontSize: 13, lineHeight: 1.7, margin: 0 }}>
+                📝 這些資訊幫助 AI 更了解你的需求。<strong style={{ color: "#fbbf24" }}>填越多，腳本越精準。</strong>
+                <br />
+                <span style={{ color: "#888" }}>不確定怎麼填？每個欄位下方都有說明和範例，照著填就好。</span>
+              </p>
+            </div>
 
             <FieldBlock
-              label="產業"
-              hint={`選擇最接近你的行業。${
-                isStoryboardIndustry ? "✅ 這個行業會自動生成分鏡表。" : "這個行業不預設生成分鏡，可在下方手動勾選。"
+              label="🏷️ 產業"
+              hint={`選擇最接近你的行業，AI 會根據行業特性調整腳本風格。${
+                isStoryboardIndustry ? " ✅ 這個行業會自動生成分鏡表。" : ""
               }`}
+              why="不同行業的觀眾習慣不同，選對行業讓 AI 用對語氣和節奏。"
             >
               <select
                 value={industry}
@@ -982,7 +985,7 @@ export default function AnalyzePage() {
               </select>
             </FieldBlock>
 
-            <FieldBlock label="主題（選填）" hint={guide.topic}>
+            <FieldBlock label="📌 主題（選填）" hint={guide.topic} why="填了主題，AI 會把所有內容圍繞這個主題展開；沒填的話，AI 會從分析結果自動判斷。">
               <input
                 value={topic}
                 onChange={(e) => setTopic(e.target.value)}
@@ -991,7 +994,7 @@ export default function AnalyzePage() {
               />
             </FieldBlock>
 
-            <FieldBlock label="目標受眾（選填）" hint={guide.audience}>
+            <FieldBlock label="👥 目標受眾（選填）" hint={guide.audience} why="告訴 AI 你的觀眾是誰，腳本的語氣和痛點就會對準他們。例如講給大學生聽 vs 講給媽媽聽，用語完全不同。">
               <input
                 value={targetAudience}
                 onChange={(e) => setTargetAudience(e.target.value)}
@@ -1000,7 +1003,7 @@ export default function AnalyzePage() {
               />
             </FieldBlock>
 
-            <FieldBlock label="CTA 目標" hint={guide.cta}>
+            <FieldBlock label="🎯 CTA 目標（選填）" hint={guide.cta} why="CTA = 你希望觀眾看完影片後做什麼。留言、追蹤、私訊、收藏？AI 會在腳本結尾幫你設計引導語。">
               <input
                 value={ctaGoal}
                 onChange={(e) => setCtaGoal(e.target.value)}
@@ -1041,8 +1044,8 @@ export default function AnalyzePage() {
                 </div>
                 <div>
                   <div style={{ fontWeight: 600, fontSize: 14 }}>📋 我也要分鏡表</div>
-                  <div style={{ color: "#555", fontSize: 12, marginTop: 2 }}>
-                    根據 AI 選出的最佳版本自動生成拍攝分鏡
+                  <div style={{ color: "#888", fontSize: 12, marginTop: 2 }}>
+                    AI 會幫你規劃每個畫面要拍什麼、鏡頭怎麼擺、字幕放什麼，照著拍就好
                   </div>
                 </div>
               </div>
@@ -1907,11 +1910,12 @@ function TabBtn({
   );
 }
 
-function FieldBlock({ label, hint, children }: { label: string; hint: string; children: ReactNode }) {
+function FieldBlock({ label, hint, why, children }: { label: string; hint: string; why?: string; children: ReactNode }) {
   return (
     <div style={{ marginBottom: 20 }}>
       <div style={{ fontWeight: 600, marginBottom: 4, fontSize: 15 }}>{label}</div>
-      <div style={{ color: "#555", fontSize: 12, marginBottom: 8, lineHeight: 1.6 }}>{hint}</div>
+      <div style={{ color: "#999", fontSize: 13, marginBottom: 4, lineHeight: 1.6 }}>{hint}</div>
+      {why && <div style={{ color: "#6ee7b7", fontSize: 12, marginBottom: 8, lineHeight: 1.5 }}>💡 {why}</div>}
       {children}
     </div>
   );
