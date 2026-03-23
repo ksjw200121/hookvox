@@ -1050,11 +1050,28 @@ export default function AnalyzePage() {
           </StepCard>
 
           <StepCard step={3} title="套用到你的主題" accent="#0a160a" border="#166534">
-            <p style={{ color: "#86efac", fontSize: 13, marginBottom: 16, lineHeight: 1.6 }}>
-              <strong style={{ color: "#4ade80" }}>有填主題</strong>：AI 用爆款公式幫你的主題寫全新腳本。
-              <strong style={{ color: "#fbbf24" }}> 沒填</strong>：AI 用同主題但不同切角重新創作三種版本。
-            </p>
-            <FieldBlock label="你的主角是什麼？" hint={guide.substitution}>
+            <div style={{ background: "#0a1a0a", border: "1px solid #166534", borderRadius: 12, padding: 16, marginBottom: 16 }}>
+              <p style={{ color: "#4ade80", fontSize: 14, fontWeight: 700, marginBottom: 10 }}>
+                🎯 這一步決定腳本的品質！
+              </p>
+              <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
+                <div style={{ display: "flex", gap: 8, alignItems: "flex-start" }}>
+                  <span style={{ color: "#4ade80", fontSize: 13, flexShrink: 0 }}>✅</span>
+                  <p style={{ color: "#86efac", fontSize: 13, lineHeight: 1.6, margin: 0 }}>
+                    <strong style={{ color: "#4ade80" }}>有填主題（推薦）</strong>：AI 會把爆款影片的「結構和手法」套用到你填的主題上，產出完全屬於你的原創腳本。
+                    <span style={{ color: "#6ee7b7" }}> 填越詳細，腳本越精準。</span>
+                  </p>
+                </div>
+                <div style={{ display: "flex", gap: 8, alignItems: "flex-start" }}>
+                  <span style={{ color: "#fbbf24", fontSize: 13, flexShrink: 0 }}>⚡</span>
+                  <p style={{ color: "#d4d4d4", fontSize: 13, lineHeight: 1.6, margin: 0 }}>
+                    <strong style={{ color: "#fbbf24" }}>沒填主題</strong>：AI 會用原影片的同一主題，但用 3 種完全不同的切角重新創作（例如換成數字型、恐懼型、故事型）。
+                  </p>
+                </div>
+              </div>
+            </div>
+
+            <FieldBlock label="你要套用的主題是什麼？" hint={guide.substitution}>
               <input
                 value={substitution}
                 onChange={(e) => setSubstitution(e.target.value)}
@@ -1062,6 +1079,15 @@ export default function AnalyzePage() {
                 style={{ ...inputStyle, borderColor: "#166534", background: "#050f05" }}
               />
             </FieldBlock>
+
+            <div style={{ background: "#111", borderRadius: 10, padding: 14, marginTop: 12 }}>
+              <p style={{ color: "#a3a3a3", fontSize: 12, margin: 0, lineHeight: 1.7 }}>
+                💡 <strong style={{ color: "#d4d4d4" }}>怎麼填效果最好？</strong><br />
+                ・只填關鍵字也行：<span style={{ color: "#86efac" }}>「牛排」「租屋補助」「醫美」</span><br />
+                ・填詳細一點更好：<span style={{ color: "#86efac" }}>「台北東區新開的韓式燒肉店，主打一人份套餐」</span><br />
+                ・給越多細節，AI 生成的腳本就越貼近你要的內容
+              </p>
+            </div>
           </StepCard>
 
           <div style={{ marginTop: 4, marginBottom: 24 }}>
