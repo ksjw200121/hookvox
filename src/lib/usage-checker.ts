@@ -27,12 +27,12 @@ const LIMITS: Record<PlanName, Record<UsageFeature, number>> = {
     GENERATE: 50,
   },
   PRO: {
-    ANALYZE: 200,
-    GENERATE: 200,
+    ANALYZE: 150,
+    GENERATE: 150,
   },
   FLAGSHIP: {
-    ANALYZE: 500,
-    GENERATE: 500,
+    ANALYZE: 9999,
+    GENERATE: 9999,
   },
 };
 

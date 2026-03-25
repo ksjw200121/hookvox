@@ -412,6 +412,12 @@ export async function POST(req: Request) {
     }
 
     const publicUserId = usage.publicUserId ?? userId;
+
+    // 免費方案用 Haiku（省成本），付費方案用 Sonnet（高品質）
+    const isPaidPlan = usage.plan === "CREATOR" || usage.plan === "PRO" || usage.plan === "FLAGSHIP";
+    const selectedModel = isPaidPlan ? "claude-sonnet-4-6" : "claude-haiku-4-5-20251001";
+    const selectedMaxTokens = isPaidPlan ? 6000 : 4000;
+
     const finalTopic = userTopic || substitution || topic || "";
     const storyboardRequired = Boolean(wantStoryboard);
 
@@ -452,8 +458,8 @@ ${
 請嚴格按照 system prompt 的 JSON 格式回傳。`;
 
     const response = await anthropic.messages.create({
-      model: "claude-sonnet-4-6",
-      max_tokens: 8000,
+      model: selectedModel,
+      max_tokens: selectedMaxTokens,
       temperature: 0.7,
       system: [
         {

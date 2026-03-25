@@ -45,6 +45,8 @@ model Subscription {
   tapPaySubId           String?
   ecpayTradeNo          String?
   ecpayMerchantTradeNo  String?
+  payuniTradeNo         String?
+  payuniMerchantOrderNo String?
   startDate             DateTime  @default(now())
   endDate               DateTime?
   createdAt             DateTime  @default(now())

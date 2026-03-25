@@ -222,6 +222,7 @@ export default function AnalyzePage() {
   const [usageLimitReached, setUsageLimitReached] = useState(false);
   const [isGuest, setIsGuest] = useState(true);
   const [showGuestModal, setShowGuestModal] = useState(false);
+  const [userPlan, setUserPlan] = useState<string>("FREE");
 
   const [transcript, setTranscript] = useState("");
   const [analysis, setAnalysis] = useState<AnalysisData | null>(null);
@@ -247,6 +248,19 @@ export default function AnalyzePage() {
         data: { session },
       } = await supabase.auth.getSession();
       setIsGuest(!session?.access_token);
+
+      if (session?.access_token) {
+        try {
+          const authHeader = await getAuthHeader();
+          const res = await fetch("/api/usage", { headers: { ...authHeader } });
+          if (res.ok) {
+            const data = await readJsonSafe(res);
+            setUserPlan(data?.plan || "FREE");
+          }
+        } catch {
+          // 忽略，不影響主要功能
+        }
+      }
     }
     loadSession();
   }, []);
@@ -1680,6 +1694,57 @@ export default function AnalyzePage() {
                 </div>
               )}
             </section>
+          )}
+
+          {scripts.length > 0 && userPlan === "FREE" && (
+            <div
+              style={{
+                marginTop: 32,
+                background: "linear-gradient(135deg, #0a0f1e 0%, #0c1a38 100%)",
+                border: "1px solid #1e3a6e",
+                borderRadius: 16,
+                padding: "24px 28px",
+                display: "flex",
+                alignItems: "center",
+                justifyContent: "space-between",
+                gap: 20,
+                flexWrap: "wrap",
+              }}
+            >
+              <div style={{ flex: 1, minWidth: 200 }}>
+                <div style={{ fontSize: 11, fontWeight: 700, color: "#60a5fa", letterSpacing: "0.1em", marginBottom: 6, textTransform: "uppercase" }}>
+                  你剛看到的是基礎版
+                </div>
+                <div style={{ fontSize: 18, fontWeight: 800, color: "#fff", marginBottom: 8, lineHeight: 1.4 }}>
+                  ✨ 升級後腳本更精準、更有爆款感
+                </div>
+                <div style={{ fontSize: 13, color: "#94a3b8", lineHeight: 1.7 }}>
+                  ・三種切角真的完全不同，不再換湯不換藥<br />
+                  ・每句話更像真人在說，不像 AI 寫的<br />
+                  ・邏輯更嚴謹，Hook 更讓人滑不走
+                </div>
+              </div>
+              <div style={{ display: "flex", flexDirection: "column", alignItems: "center", gap: 8 }}>
+                <Link
+                  href="/plans"
+                  style={{
+                    background: "linear-gradient(135deg, #2563eb, #1d4ed8)",
+                    color: "#fff",
+                    padding: "14px 32px",
+                    borderRadius: 10,
+                    fontWeight: 800,
+                    fontSize: 15,
+                    textDecoration: "none",
+                    whiteSpace: "nowrap",
+                    display: "block",
+                    boxShadow: "0 4px 20px rgba(37,99,235,0.4)",
+                  }}
+                >
+                  升級看差異 →
+                </Link>
+                <div style={{ fontSize: 11, color: "#475569" }}>NT$699/月・可隨時取消</div>
+              </div>
+            </div>
           )}
 
           {storyboard.length > 0 && (
