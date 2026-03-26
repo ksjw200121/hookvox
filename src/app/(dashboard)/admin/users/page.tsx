@@ -35,6 +35,42 @@ function formatAmount(value?: number | null) {
   return `NT$${value}`;
 }
 
+function fmtSubStatus(s?: string | null) {
+  if (!s) return "無";
+  const map: Record<string, string> = {
+    ACTIVE: "訂閱中", FREE: "免費", EXPIRED: "已到期",
+    CANCELLED: "已取消", PENDING: "待付款",
+  };
+  return map[s.toUpperCase()] ?? s;
+}
+
+function fmtAccountStatus(s?: string | null) {
+  if (!s) return "使用中";
+  return s.toUpperCase() === "SUSPENDED" ? "已停用" : "使用中";
+}
+
+function fmtRole(s?: string | null) {
+  if (!s) return "一般用戶";
+  return s.toUpperCase() === "ADMIN" ? "管理員" : "一般用戶";
+}
+
+function fmtBillingCycle(s?: string | null) {
+  if (!s) return "";
+  const map: Record<string, string> = {
+    monthly: "月繳", quarterly: "季繳", biannual: "半年繳", annual: "年繳",
+  };
+  return map[s.toLowerCase()] ?? s;
+}
+
+function fmtPaymentStatus(s?: string | null) {
+  if (!s) return "無";
+  const map: Record<string, string> = {
+    PAID: "已付款", SUCCESS: "已付款", PENDING: "待付款",
+    CANCELLED: "已取消", FAILED: "付款失敗",
+  };
+  return map[s.toUpperCase()] ?? s;
+}
+
 export default function AdminUsersPage() {
   const { token, isAdmin, loading: authLoading } = useAdminSession();
   const [loading, setLoading] = useState(true);
@@ -163,10 +199,10 @@ export default function AdminUsersPage() {
             className="rounded-xl border border-white/10 bg-black px-4 py-3 text-sm outline-none"
           >
             <option value="">全部訂閱狀態</option>
-            <option value="ACTIVE">ACTIVE</option>
-            <option value="FREE">FREE</option>
-            <option value="EXPIRED">EXPIRED</option>
-            <option value="CANCELLED">CANCELLED</option>
+            <option value="ACTIVE">訂閱中</option>
+            <option value="FREE">免費</option>
+            <option value="EXPIRED">已到期</option>
+            <option value="CANCELLED">已取消</option>
           </select>
           <select
             value={filters.accountStatus}
@@ -179,8 +215,8 @@ export default function AdminUsersPage() {
             className="rounded-xl border border-white/10 bg-black px-4 py-3 text-sm outline-none"
           >
             <option value="">全部帳號狀態</option>
-            <option value="ACTIVE">ACTIVE</option>
-            <option value="SUSPENDED">SUSPENDED</option>
+            <option value="ACTIVE">使用中</option>
+            <option value="SUSPENDED">已停用</option>
           </select>
           <select
             value={filters.role}
@@ -188,8 +224,8 @@ export default function AdminUsersPage() {
             className="rounded-xl border border-white/10 bg-black px-4 py-3 text-sm outline-none"
           >
             <option value="">全部角色</option>
-            <option value="USER">USER</option>
-            <option value="ADMIN">ADMIN</option>
+            <option value="USER">一般用戶</option>
+            <option value="ADMIN">管理員</option>
           </select>
           <input
             type="date"
@@ -278,9 +314,9 @@ export default function AdminUsersPage() {
                     </td>
                     <td className="px-3 py-4 font-semibold">{item.plan}</td>
                     <td className="px-3 py-4 text-white/70">
-                      {item.subscriptionStatus}
+                      {fmtSubStatus(item.subscriptionStatus)}
                       {item.billingCycle ? (
-                        <div className="text-xs text-white/35">{item.billingCycle}</div>
+                        <div className="text-xs text-white/35">{fmtBillingCycle(item.billingCycle)}</div>
                       ) : null}
                     </td>
                     <td className="px-3 py-4">
@@ -291,7 +327,7 @@ export default function AdminUsersPage() {
                             : "bg-emerald-500/20 text-emerald-200"
                         }`}
                       >
-                        {item.accountStatus || "ACTIVE"}
+                        {fmtAccountStatus(item.accountStatus)}
                       </span>
                     </td>
                     <td className="px-3 py-4">
@@ -312,11 +348,11 @@ export default function AdminUsersPage() {
                           : "停用"}
                       </button>
                     </td>
-                    <td className="px-3 py-4 text-white/70">{item.role || "USER"}</td>
+                    <td className="px-3 py-4 text-white/70">{fmtRole(item.role)}</td>
                     <td className="px-3 py-4 text-white/70">
                       <div>{formatDate(item.lastPaymentAt)}</div>
                       <div className="text-xs text-white/35">
-                        {item.lastPaymentStatus || "無"} / {formatAmount(item.lastPaymentAmount)}
+                        {fmtPaymentStatus(item.lastPaymentStatus)} / {formatAmount(item.lastPaymentAmount)}
                       </div>
                     </td>
                     <td className="px-3 py-4 text-white/70">

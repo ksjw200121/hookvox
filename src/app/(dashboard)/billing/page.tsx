@@ -552,7 +552,7 @@ const isExpiringSoon =
                     </div>
                   ) : (
                     <p className="text-xs text-white/40">
-                      {order.status === "CANCELLED" ? "已取消" : order.status}
+                      {order.status === "CANCELLED" ? "已取消" : order.status === "FAILED" ? "付款失敗" : order.status === "SUCCESS" ? "已付款" : order.status}
                     </p>
                   )}
                 </div>

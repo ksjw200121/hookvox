@@ -4,6 +4,32 @@ import { useEffect, useMemo, useState } from "react";
 import { AdminSectionCard } from "@/components/admin/AdminShell";
 import { useAdminSession } from "@/components/admin/useAdminSession";
 
+function fmtStatus(s?: string | null) {
+  const map: Record<string, string> = {
+    ACTIVE: "訂閱中", FREE: "免費", EXPIRED: "已到期", CANCELLED: "已取消", PENDING: "待付款",
+  };
+  return map[String(s || "").toUpperCase()] ?? s ?? "無";
+}
+function fmtAccountStatus(s?: string | null) {
+  return String(s || "").toUpperCase() === "SUSPENDED" ? "已停用" : "使用中";
+}
+function fmtRole(s?: string | null) {
+  return String(s || "").toUpperCase() === "ADMIN" ? "管理員" : "一般用戶";
+}
+function fmtCycle(s?: string | null) {
+  const map: Record<string, string> = {
+    monthly: "月繳", quarterly: "季繳", biannual: "半年繳", annual: "年繳",
+  };
+  return map[String(s || "").toLowerCase()] ?? s ?? "";
+}
+function fmtOrderStatus(s?: string | null) {
+  const map: Record<string, string> = {
+    PAID: "已付款", SUCCESS: "已付款", PENDING: "待付款",
+    CANCELLED: "已取消", FAILED: "付款失敗",
+  };
+  return map[String(s || "").toUpperCase()] ?? s ?? "無";
+}
+
 type SummaryData = {
   user: {
     id: string;
@@ -488,16 +514,16 @@ export default function AdminUserDetailPage({
           <div className="rounded-2xl border border-white/10 bg-white/5 p-4">
             <div className="text-sm text-white/40">方案 / 狀態</div>
             <div className="mt-2 text-lg font-black">
-              {summary.billing.plan} / {summary.billing.status}
+              {summary.billing.plan} / {fmtStatus(summary.billing.status)}
             </div>
             <div className="mt-2 text-xs text-white/35">
-              {summary.billing.billingCycle || "無週期"}
+              {fmtCycle(summary.billing.billingCycle) || "無週期"}
             </div>
           </div>
           <div className="rounded-2xl border border-white/10 bg-white/5 p-4">
             <div className="text-sm text-white/40">帳號狀態 / 角色</div>
             <div className="mt-2 text-lg font-black">
-              {summary.user.accountStatus} / {summary.user.role || "USER"}
+              {fmtAccountStatus(summary.user.accountStatus)} / {fmtRole(summary.user.role)}
             </div>
             <div className="mt-2 text-xs text-white/35">
               註冊：{formatDate(summary.user.createdAt)}
@@ -524,8 +550,8 @@ export default function AdminUserDetailPage({
               onChange={(e) => setProfileForm((prev) => ({ ...prev, role: e.target.value }))}
               className="rounded-xl border border-white/10 bg-black px-4 py-3 text-sm"
             >
-              <option value="USER">USER</option>
-              <option value="ADMIN">ADMIN</option>
+              <option value="USER">一般用戶</option>
+              <option value="ADMIN">管理員</option>
             </select>
             <select
               value={profileForm.accountStatus}
@@ -537,8 +563,8 @@ export default function AdminUserDetailPage({
               }
               className="rounded-xl border border-white/10 bg-black px-4 py-3 text-sm"
             >
-              <option value="ACTIVE">ACTIVE</option>
-              <option value="SUSPENDED">SUSPENDED</option>
+              <option value="ACTIVE">使用中</option>
+              <option value="SUSPENDED">已停用</option>
             </select>
             <input
               value={profileForm.instagramHandle}
@@ -637,10 +663,10 @@ export default function AdminUserDetailPage({
                   <tr key={order.id} className="border-b border-white/5 align-top">
                     <td className="px-3 py-4">
                       {order.plan}
-                      <div className="text-xs text-white/35">{order.billingCycle}</div>
+                      <div className="text-xs text-white/35">{fmtCycle(order.billingCycle)}</div>
                     </td>
                     <td className="px-3 py-4">{formatAmount(order.amount)}</td>
-                    <td className="px-3 py-4">{order.status}</td>
+                    <td className="px-3 py-4">{fmtOrderStatus(order.status)}</td>
                     <td className="px-3 py-4">{formatDate(order.paidAt || order.createdAt)}</td>
                     <td className="px-3 py-4 text-xs text-white/45">
                       <div>{order.merchantTradeNo || "無"}</div>
@@ -958,9 +984,9 @@ export default function AdminUserDetailPage({
               }
               className="rounded-xl border border-white/10 bg-black px-4 py-3 text-sm"
             >
-              <option value="ACTIVE">ACTIVE</option>
-              <option value="CANCELLED">CANCELLED</option>
-              <option value="EXPIRED">EXPIRED</option>
+              <option value="ACTIVE">訂閱中</option>
+              <option value="CANCELLED">已取消</option>
+              <option value="EXPIRED">已到期</option>
             </select>
             <select
               value={subscriptionForm.billingCycle}
@@ -972,10 +998,10 @@ export default function AdminUserDetailPage({
               }
               className="rounded-xl border border-white/10 bg-black px-4 py-3 text-sm"
             >
-              <option value="monthly">monthly</option>
-              <option value="quarterly">quarterly</option>
-              <option value="biannual">biannual</option>
-              <option value="annual">annual</option>
+              <option value="monthly">月繳</option>
+              <option value="quarterly">季繳</option>
+              <option value="biannual">半年繳</option>
+              <option value="annual">年繳</option>
             </select>
             <input
               value={subscriptionForm.reason}
