@@ -107,6 +107,29 @@ export async function POST(req: Request) {
       return new Response("0|CheckMacValue 驗證失敗", { status: 400 });
     }
 
+    // ── 防重播：同一筆交易已處理成功過，直接回 1|OK 不重複執行 ──
+    const existingTradeNo = body.MerchantTradeNo;
+    if (existingTradeNo) {
+      const { data: existing } = await supabaseAdmin
+        .from("payment_webhook_events")
+        .select("id")
+        .eq("merchant_trade_no", existingTradeNo)
+        .eq("ok", true)
+        .eq("stage", "SUCCESS")
+        .limit(1)
+        .maybeSingle();
+
+      if (existing) {
+        await logWebhookEvent(supabaseAdmin, req, body, {
+          ok: true,
+          stage: "DUPLICATE_IGNORED",
+          message: "此交易已成功處理過，忽略重複通知",
+          checkMacValid: true,
+        });
+        return new Response("1|OK");
+      }
+    }
+
     if (body.RtnCode !== "1") {
       await logWebhookEvent(supabaseAdmin, req, body, {
         ok: true,

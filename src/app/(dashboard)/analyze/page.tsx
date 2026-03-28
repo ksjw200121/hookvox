@@ -549,7 +549,7 @@ export default function AnalyzePage() {
       }
 
       if (data?.cached) {
-        setSavedNotice("這支影片你之前已分析過，已直接讀取舊資料。");
+        setSavedNotice("這支影片你之前分析過了，直接顯示上次的結果，不扣額度。");
       }
     } catch (err: any) {
       const msg = err?.message || "分析失敗";
@@ -1130,7 +1130,7 @@ export default function AnalyzePage() {
                   fontWeight: 600,
                 }}
               >
-                已讀取先前生成內容，未重複扣次數
+                這支影片之前生成過了，直接顯示上次結果，不扣額度
               </div>
             )}
             </div>

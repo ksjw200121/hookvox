@@ -235,17 +235,15 @@ export default function PlansPage() {
         return
       }
 
-      const wrapper = document.createElement('div')
-      wrapper.innerHTML = data.paymentHtml
-      document.body.appendChild(wrapper)
-
-      const form = wrapper.querySelector('form') as HTMLFormElement | null
+      const parsed = new DOMParser().parseFromString(data.paymentHtml, 'text/html')
+      const form = parsed.querySelector('form') as HTMLFormElement | null
       if (!form) {
         alert('付款表單建立失敗')
         setLoading(false)
         return
       }
 
+      document.body.appendChild(form)
       form.submit()
     } catch {
       alert('付款系統暫時無法使用，請稍後再試')
