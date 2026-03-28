@@ -11,6 +11,12 @@ interface UsageItem {
   remaining: number
 }
 
+interface DailyUsage {
+  date: string
+  analyze: number
+  generate: number
+}
+
 interface UsageResponse {
   plan: string
   subscriptionEndDate?: string | null
@@ -20,6 +26,7 @@ interface UsageResponse {
     generate: UsageItem
     cycleEnd?: string | null
     week?: { analyze: number; generate: number }
+    daily?: DailyUsage[]
   }
 }
 
@@ -118,6 +125,7 @@ export default function DashboardPage() {
             week: json.usage?.week
               ? { analyze: json.usage.week.analyze ?? 0, generate: json.usage.week.generate ?? 0 }
               : undefined,
+            daily: json.usage?.daily || undefined,
           },
         })
       } catch (error) {
@@ -351,6 +359,65 @@ export default function DashboardPage() {
         </div>
       </div>
 
+      {/* ── 過去 7 天使用趨勢 ── */}
+      {!loading && data.usage.daily && data.usage.daily.length > 0 && (
+        <div className="glass rounded-2xl p-6">
+          <h2 className="font-bold mb-4">過去 7 天使用趨勢</h2>
+          {(() => {
+            const daily = data.usage.daily!;
+            const maxVal = Math.max(...daily.map((d) => d.analyze + d.generate), 1);
+            const barH = 120;
+            return (
+              <div className="flex items-end gap-2 justify-between" style={{ height: barH + 40 }}>
+                {daily.map((d) => {
+                  const total = d.analyze + d.generate;
+                  const aH = Math.round((d.analyze / maxVal) * barH);
+                  const gH = Math.round((d.generate / maxVal) * barH);
+                  const weekday = ['日', '一', '二', '三', '四', '五', '六'][new Date(d.date + 'T00:00:00').getDay()];
+                  const shortDate = d.date.slice(5).replace('-', '/');
+                  return (
+                    <div key={d.date} className="flex flex-col items-center gap-1 flex-1">
+                      <div className="text-xs text-white/40 font-medium">{total > 0 ? total : ''}</div>
+                      <div className="flex flex-col items-center justify-end" style={{ height: barH }}>
+                        {gH > 0 && (
+                          <div
+                            className="w-6 sm:w-8 rounded-t bg-blue-500/70"
+                            style={{ height: gH }}
+                            title={`生成 ${d.generate}`}
+                          />
+                        )}
+                        {aH > 0 && (
+                          <div
+                            className={`w-6 sm:w-8 bg-brand-500/70 ${gH > 0 ? '' : 'rounded-t'} rounded-b`}
+                            style={{ height: aH }}
+                            title={`分析 ${d.analyze}`}
+                          />
+                        )}
+                        {total === 0 && (
+                          <div className="w-6 sm:w-8 bg-white/5 rounded h-1" />
+                        )}
+                      </div>
+                      <div className="text-xs text-white/30">{shortDate}</div>
+                      <div className="text-xs text-white/20">{weekday}</div>
+                    </div>
+                  );
+                })}
+              </div>
+            );
+          })()}
+          <div className="flex items-center gap-6 mt-4 pt-3 border-t border-white/5 text-xs text-white/40">
+            <div className="flex items-center gap-1.5">
+              <div className="w-3 h-3 rounded bg-brand-500/70" />
+              分析
+            </div>
+            <div className="flex items-center gap-1.5">
+              <div className="w-3 h-3 rounded bg-blue-500/70" />
+              生成
+            </div>
+          </div>
+        </div>
+      )}
+
       <div>
         <h2 className="text-xl font-bold mb-4">快速開始</h2>
         <div className="grid md:grid-cols-2 gap-4">
@@ -383,6 +450,26 @@ export default function DashboardPage() {
           </Link>
         </div>
       </div>
+
+      {!loading && percent >= 80 && percent < 100 && totalRemaining > 0 && (
+        <div className="bg-amber-500/10 border border-amber-500/30 rounded-2xl p-6">
+          <div className="flex items-start gap-4">
+            <div className="text-2xl">⚡</div>
+            <div>
+              <h3 className="font-bold text-amber-300 mb-1">額度即將用完</h3>
+              <p className="text-white/60 text-sm mb-4">
+                你已使用 {Math.round(percent)}% 的額度（剩餘 {totalRemaining} 次），建議提前升級以免中斷使用。
+              </p>
+              <Link
+                href="/plans"
+                className="inline-block bg-amber-500 hover:bg-amber-400 text-black px-6 py-2 rounded-xl font-bold text-sm transition-colors"
+              >
+                查看升級方案
+              </Link>
+            </div>
+          </div>
+        </div>
+      )}
 
       {!loading && (analyze.remaining === 0 || generate.remaining === 0) && (
         <div className="bg-red-500/10 border border-red-500/30 rounded-2xl p-6">

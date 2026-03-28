@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import Link from "next/link";
 import { supabase } from "@/lib/supabase";
 import AuthTurnstile from "@/components/auth/AuthTurnstile";
@@ -12,11 +12,25 @@ export default function ForgotPasswordPage() {
   const [loading, setLoading] = useState(false);
   const [message, setMessage] = useState("");
   const [success, setSuccess] = useState(false);
+  const [cooldown, setCooldown] = useState(0);
+
+  // 60 秒冷卻防刷
+  useEffect(() => {
+    if (cooldown <= 0) return;
+    const timer = setTimeout(() => setCooldown((c) => c - 1), 1000);
+    return () => clearTimeout(timer);
+  }, [cooldown]);
 
   const handleResetRequest = async (e: React.FormEvent) => {
     e.preventDefault();
     setLoading(true);
     setMessage("");
+
+    if (cooldown > 0) {
+      setMessage(`請等 ${cooldown} 秒後再試。`);
+      setLoading(false);
+      return;
+    }
 
     if (!captchaToken) {
       setMessage("請先完成真人驗證。");
@@ -37,6 +51,7 @@ export default function ForgotPasswordPage() {
       }
 
       setSuccess(true);
+      setCooldown(60);
       setLoading(false);
     } catch (err: unknown) {
       setMessage(translateSupabaseAuthError((err as Error)?.message || "Failed to fetch"));
@@ -92,10 +107,10 @@ export default function ForgotPasswordPage() {
 
             <button
               type="submit"
-              disabled={loading}
+              disabled={loading || cooldown > 0}
               className="w-full bg-red-500 hover:bg-red-600 rounded-lg py-3 font-semibold transition disabled:opacity-50"
             >
-              {loading ? "寄送中..." : "寄送重設密碼信"}
+              {loading ? "寄送中..." : cooldown > 0 ? `${cooldown} 秒後可再次寄送` : "寄送重設密碼信"}
             </button>
 
             {message ? (

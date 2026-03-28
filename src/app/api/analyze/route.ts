@@ -375,7 +375,7 @@ export async function POST(req: Request) {
             limit: cachedUsage.limit,
             remaining: cachedUsage.remaining,
           },
-          message: "這支影片你已經分析過，已直接讀取資料庫內容，未重複扣次數",
+          message: "這支影片你之前分析過了，直接顯示上次的結果，不會再扣一次額度",
         });
       }
     }

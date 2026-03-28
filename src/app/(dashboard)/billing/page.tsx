@@ -273,11 +273,12 @@ const isExpiringSoon =
         setSubscription(billingData?.subscription || null);
       }
 
-      const wrapper = document.createElement("div");
-      wrapper.innerHTML = data.paymentHtml;
-      document.body.appendChild(wrapper);
-      const form = wrapper.querySelector("form") as HTMLFormElement | null;
-      if (form) form.submit();
+      const parsed = new DOMParser().parseFromString(data.paymentHtml, "text/html");
+      const form = parsed.querySelector("form") as HTMLFormElement | null;
+      if (form) {
+        document.body.appendChild(form);
+        form.submit();
+      }
     } catch {
       setError("付款系統暫時無法使用，請稍後再試");
     } finally {

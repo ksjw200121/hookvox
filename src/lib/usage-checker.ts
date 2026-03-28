@@ -824,6 +824,7 @@ export type UsageSnapshot = {
       adjustment: number;
     };
     week: { analyze: number; generate: number };
+    daily?: { date: string; analyze: number; generate: number }[];
   };
 };
 
@@ -889,6 +890,26 @@ export async function getUsageSnapshotForSupabaseId(
   const analyzeLimit = Math.max(LIMITS[plan].ANALYZE + analyzeAdjustment, 0);
   const generateLimit = Math.max(LIMITS[plan].GENERATE + generateAdjustment, 0);
 
+  // 過去 7 天每日使用量
+  const dailyMap = new Map<string, { analyze: number; generate: number }>();
+  for (let i = 6; i >= 0; i--) {
+    const d = new Date();
+    d.setDate(d.getDate() - i);
+    const key = d.toISOString().slice(0, 10);
+    dailyMap.set(key, { analyze: 0, generate: 0 });
+  }
+  for (const row of weekLogs || []) {
+    const key = new Date((row as any).createdAt).toISOString().slice(0, 10);
+    const group = getActionGroup((row as any).action);
+    const entry = dailyMap.get(key);
+    if (entry && group === "ANALYZE") entry.analyze += 1;
+    if (entry && group === "GENERATE") entry.generate += 1;
+  }
+  const daily = Array.from(dailyMap.entries()).map(([date, counts]) => ({
+    date,
+    ...counts,
+  }));
+
   return {
     plan,
     accountStatus: context.accountStatus,
@@ -910,6 +931,7 @@ export async function getUsageSnapshotForSupabaseId(
         adjustment: generateAdjustment,
       },
       week: { analyze: weekAnalyze, generate: weekGenerate },
+      daily,
     },
   };
 }
