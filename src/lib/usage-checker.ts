@@ -56,6 +56,8 @@ type SubscriptionRow = {
   status: string;
   ecpayTradeNo?: string | null;
   ecpayMerchantTradeNo?: string | null;
+  newebpayTradeNo?: string | null;
+  newebpayMerchantOrderNo?: string | null;
   startDate?: string | null;
   endDate?: string | null;
 };
@@ -429,7 +431,7 @@ async function ensureSubscriptionByInternalUserId(
 
   const { data: existingSubscription, error: selectError } = await supabaseAdmin
     .from("subscriptions")
-    .select("id, userId, plan, status, ecpayTradeNo, ecpayMerchantTradeNo, startDate, endDate")
+    .select("id, userId, plan, status, ecpayTradeNo, ecpayMerchantTradeNo, newebpayTradeNo, newebpayMerchantOrderNo, startDate, endDate")
     .eq("userId", internalUserId)
     .maybeSingle();
 
@@ -454,7 +456,7 @@ async function ensureSubscriptionByInternalUserId(
       createdAt: now,
       updatedAt: now,
     })
-    .select("id, userId, plan, status, ecpayTradeNo, ecpayMerchantTradeNo, startDate, endDate")
+    .select("id, userId, plan, status, ecpayTradeNo, ecpayMerchantTradeNo, newebpayTradeNo, newebpayMerchantOrderNo, startDate, endDate")
     .single();
 
   if (insertError) {
@@ -464,7 +466,7 @@ async function ensureSubscriptionByInternalUserId(
     if (isDuplicateUserId) {
       const { data: row, error: retryErr } = await supabaseAdmin
         .from("subscriptions")
-        .select("id, userId, plan, status, ecpayTradeNo, ecpayMerchantTradeNo, startDate, endDate")
+        .select("id, userId, plan, status, ecpayTradeNo, ecpayMerchantTradeNo, newebpayTradeNo, newebpayMerchantOrderNo, startDate, endDate")
         .eq("userId", internalUserId)
         .maybeSingle();
       if (!retryErr && row) return row as SubscriptionRow;
@@ -497,6 +499,8 @@ async function getSubscriptionReadOnly(
       status: true,
       ecpayTradeNo: true,
       ecpayMerchantTradeNo: true,
+      newebpayTradeNo: true,
+      newebpayMerchantOrderNo: true,
       startDate: true,
       endDate: true,
     },
@@ -509,6 +513,8 @@ async function getSubscriptionReadOnly(
     status: String(data.status).toUpperCase(),
     ecpayTradeNo: data.ecpayTradeNo ?? null,
     ecpayMerchantTradeNo: data.ecpayMerchantTradeNo ?? null,
+    newebpayTradeNo: data.newebpayTradeNo ?? null,
+    newebpayMerchantOrderNo: data.newebpayMerchantOrderNo ?? null,
     startDate: data.startDate?.toISOString() ?? null,
     endDate: data.endDate?.toISOString() ?? null,
   };
@@ -547,8 +553,8 @@ async function syncSubscriptionFromPaidOrder(
       status: "ACTIVE" as any,
       startDate: new Date(activePaidOrder.startDate),
       endDate: new Date(activePaidOrder.endDate),
-      ecpayTradeNo: activePaidOrder.tradeNo,
-      ecpayMerchantTradeNo: activePaidOrder.merchantTradeNo,
+      newebpayTradeNo: activePaidOrder.tradeNo,
+      newebpayMerchantOrderNo: activePaidOrder.merchantTradeNo,
       updatedAt: now,
     },
     create: {
@@ -557,8 +563,8 @@ async function syncSubscriptionFromPaidOrder(
       status: "ACTIVE" as any,
       startDate: new Date(activePaidOrder.startDate),
       endDate: new Date(activePaidOrder.endDate),
-      ecpayTradeNo: activePaidOrder.tradeNo,
-      ecpayMerchantTradeNo: activePaidOrder.merchantTradeNo,
+      newebpayTradeNo: activePaidOrder.tradeNo,
+      newebpayMerchantOrderNo: activePaidOrder.merchantTradeNo,
     },
     select: {
       id: true,
@@ -567,6 +573,8 @@ async function syncSubscriptionFromPaidOrder(
       status: true,
       ecpayTradeNo: true,
       ecpayMerchantTradeNo: true,
+      newebpayTradeNo: true,
+      newebpayMerchantOrderNo: true,
       startDate: true,
       endDate: true,
     },
@@ -579,6 +587,8 @@ async function syncSubscriptionFromPaidOrder(
     status: String(synced.status).toUpperCase(),
     ecpayTradeNo: synced.ecpayTradeNo ?? null,
     ecpayMerchantTradeNo: synced.ecpayMerchantTradeNo ?? null,
+    newebpayTradeNo: synced.newebpayTradeNo ?? null,
+    newebpayMerchantOrderNo: synced.newebpayMerchantOrderNo ?? null,
     startDate: synced.startDate?.toISOString() ?? null,
     endDate: synced.endDate?.toISOString() ?? null,
   };
@@ -621,6 +631,8 @@ async function normalizeSubscriptionState(
         status: true,
         ecpayTradeNo: true,
         ecpayMerchantTradeNo: true,
+        newebpayTradeNo: true,
+        newebpayMerchantOrderNo: true,
         startDate: true,
         endDate: true,
       },
@@ -632,6 +644,8 @@ async function normalizeSubscriptionState(
       status: String(updatedSubscription.status).toUpperCase(),
       ecpayTradeNo: updatedSubscription.ecpayTradeNo ?? null,
       ecpayMerchantTradeNo: updatedSubscription.ecpayMerchantTradeNo ?? null,
+      newebpayTradeNo: updatedSubscription.newebpayTradeNo ?? null,
+      newebpayMerchantOrderNo: updatedSubscription.newebpayMerchantOrderNo ?? null,
       startDate: updatedSubscription.startDate?.toISOString() ?? null,
       endDate: updatedSubscription.endDate?.toISOString() ?? null,
     };

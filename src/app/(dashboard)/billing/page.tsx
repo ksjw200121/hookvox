@@ -244,7 +244,7 @@ const isExpiringSoon =
         setError("請先登入");
         return;
       }
-      const res = await fetch("/api/ecpay/continue-payment", {
+      const res = await fetch("/api/newebpay/continue-payment", {
         method: "POST",
         headers: {
           "Content-Type": "application/json",
@@ -298,7 +298,7 @@ const isExpiringSoon =
         setError("請先登入");
         return;
       }
-      const res = await fetch("/api/ecpay/cancel-order", {
+      const res = await fetch("/api/newebpay/cancel-order", {
         method: "POST",
         headers: {
           "Content-Type": "application/json",

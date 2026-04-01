@@ -135,6 +135,8 @@ export async function resolveAdminTargetUser(supabaseId: string) {
           endDate: true,
           ecpayTradeNo: true,
           ecpayMerchantTradeNo: true,
+          newebpayTradeNo: true,
+          newebpayMerchantOrderNo: true,
         },
       },
     },

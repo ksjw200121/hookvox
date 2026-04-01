@@ -221,7 +221,7 @@ export default function PlansPage() {
     try {
       const authHeader = await getAuthHeader()
 
-      const res = await fetch('/api/ecpay/create-order', {
+      const res = await fetch('/api/newebpay/create-order', {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',

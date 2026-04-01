@@ -63,6 +63,8 @@ export async function POST(
         endDate: true,
         ecpayTradeNo: true,
         ecpayMerchantTradeNo: true,
+        newebpayTradeNo: true,
+        newebpayMerchantOrderNo: true,
       },
     });
 
@@ -107,8 +109,8 @@ export async function POST(
           status: "ACTIVE",
           startDate,
           endDate,
-          ecpayTradeNo: latestPaidOrder.tradeNo,
-          ecpayMerchantTradeNo: latestPaidOrder.merchantTradeNo,
+          newebpayTradeNo: latestPaidOrder.tradeNo,
+          newebpayMerchantOrderNo: latestPaidOrder.merchantTradeNo,
         },
         create: {
           userId: targetUser.id,
@@ -116,8 +118,8 @@ export async function POST(
           status: "ACTIVE",
           startDate,
           endDate,
-          ecpayTradeNo: latestPaidOrder.tradeNo,
-          ecpayMerchantTradeNo: latestPaidOrder.merchantTradeNo,
+          newebpayTradeNo: latestPaidOrder.tradeNo,
+          newebpayMerchantOrderNo: latestPaidOrder.merchantTradeNo,
         },
         select: {
           id: true,
@@ -127,6 +129,8 @@ export async function POST(
           endDate: true,
           ecpayTradeNo: true,
           ecpayMerchantTradeNo: true,
+          newebpayTradeNo: true,
+          newebpayMerchantOrderNo: true,
         },
       });
 
@@ -176,6 +180,8 @@ export async function POST(
           endDate: new Date(),
           ecpayTradeNo: null,
           ecpayMerchantTradeNo: null,
+          newebpayTradeNo: null,
+          newebpayMerchantOrderNo: null,
         },
         create: {
           userId: targetUser.id,
@@ -272,6 +278,8 @@ export async function POST(
           endDate: true,
           ecpayTradeNo: true,
           ecpayMerchantTradeNo: true,
+          newebpayTradeNo: true,
+          newebpayMerchantOrderNo: true,
         },
       });
 

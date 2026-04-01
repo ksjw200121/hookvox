@@ -43,10 +43,12 @@ model Subscription {
   plan                  Plan      @default(FREE)
   status                SubStatus @default(ACTIVE)
   tapPaySubId           String?
-  ecpayTradeNo          String?
-  ecpayMerchantTradeNo  String?
-  payuniTradeNo         String?
-  payuniMerchantOrderNo String?
+  ecpayTradeNo              String?
+  ecpayMerchantTradeNo      String?
+  newebpayTradeNo           String?
+  newebpayMerchantOrderNo   String?
+  payuniTradeNo             String?
+  payuniMerchantOrderNo     String?
   startDate             DateTime  @default(now())
   endDate               DateTime?
   createdAt             DateTime  @default(now())
