@@ -69,6 +69,8 @@ const TABS = [
   { id: "start", label: "🚀 註冊 / 登入" },
   { id: "analyze", label: "🔍 爆款分析" },
   { id: "generate", label: "✨ 生成腳本" },
+  { id: "ig", label: "📱 IG Reels 攻略" },
+  { id: "tips", label: "🔥 實戰技巧" },
   { id: "database", label: "📚 資料庫" },
   { id: "extend", label: "🎯 爆款延伸" },
   { id: "plans", label: "💳 方案 / 帳單" },
@@ -421,6 +423,231 @@ export default function GuidePage() {
           </>
         )}
 
+        {/* ===== IG Reels 攻略 ===== */}
+        {tab === "ig" && (
+          <>
+            <div className="rounded-2xl border border-purple-500/30 bg-purple-500/5 p-6">
+              <h3 className="text-lg font-black text-white mb-2">為什麼 IG Reels 不能直接貼網址？</h3>
+              <p className="text-white/70 text-sm leading-relaxed">
+                Instagram 會主動封鎖自動下載，用網址抓影片非常不穩定。
+                為了確保你每次分析都能成功，我們提供兩種更可靠的方式。
+              </p>
+            </div>
+
+            <Divider label="方法一：上傳影片檔（最推薦）" />
+
+            <StepCard num={1} title="從 IG 下載 Reels 影片">
+              <p>打開 Instagram，找到你想分析的 Reels：</p>
+              <MockUI>
+                <div className="space-y-3 text-sm">
+                  <div className="flex items-center gap-2">
+                    <span className="text-white font-bold">iOS（iPhone）：</span>
+                  </div>
+                  <ol className="list-decimal list-inside space-y-1 text-white/70">
+                    <li>點 Reels 右下角的 <span className="text-red-300 font-bold">「...」</span> 按鈕</li>
+                    <li>選 <span className="text-red-300 font-bold">「儲存」</span> 到手機相簿</li>
+                    <li>如果沒有儲存選項，用螢幕錄影也可以</li>
+                  </ol>
+                  <div className="flex items-center gap-2 pt-2">
+                    <span className="text-white font-bold">Android：</span>
+                  </div>
+                  <ol className="list-decimal list-inside space-y-1 text-white/70">
+                    <li>點 Reels 右下角的 <span className="text-red-300 font-bold">「...」</span> 按鈕</li>
+                    <li>選 <span className="text-red-300 font-bold">「下載」</span></li>
+                    <li>影片會存到你的相簿或下載資料夾</li>
+                  </ol>
+                </div>
+              </MockUI>
+            </StepCard>
+
+            <StepCard num={2} title="上傳到 Hookvox 分析" tip="影片大小建議 24MB 以下。如果太大，用剪映壓縮到 720p。">
+              <MockUI>
+                <div className="space-y-3">
+                  <div className="flex items-center gap-2">
+                    <Arrow label="選這個" dir="right" />
+                    <span className="px-4 py-2 rounded-lg bg-red-500/20 border border-red-500/40 text-red-300 text-sm font-bold">
+                      上傳音訊 / 影片
+                    </span>
+                  </div>
+                  <div className="text-center">
+                    <Arrow label="選擇剛才儲存的 IG 影片" dir="down" />
+                  </div>
+                  <div className="border-2 border-dashed border-white/20 rounded-xl p-6 text-center text-white/40 text-sm">
+                    點擊上傳或拖拽檔案到這裡
+                  </div>
+                </div>
+              </MockUI>
+              <p>上傳後，填好行業和主題，按 <span className="text-red-400 font-bold">「開始爆款分析」</span> 就行了！</p>
+            </StepCard>
+
+            <Divider label="方法二：貼逐字稿（最快）" />
+
+            <StepCard num={3} title="複製 IG Reels 的字幕/文字">
+              <p>如果你只想快速分析文案和 Hook，不需要整支影片：</p>
+              <MockUI>
+                <div className="space-y-2 text-sm">
+                  <ol className="list-decimal list-inside space-y-2 text-white/70">
+                    <li>打開 IG Reels → 看影片的 <span className="text-red-300 font-bold">說明文字（Caption）</span></li>
+                    <li>長按文字 → <span className="text-red-300 font-bold">複製</span></li>
+                    <li>或者邊看影片邊手打出影片中說的話</li>
+                  </ol>
+                </div>
+              </MockUI>
+            </StepCard>
+
+            <StepCard num={4} title="貼到 Hookvox 的逐字稿欄位">
+              <MockUI>
+                <div className="space-y-3">
+                  <div className="flex items-center gap-2">
+                    <Arrow label="選這個" dir="right" />
+                    <span className="px-4 py-2 rounded-lg bg-white/10 border border-white/20 text-white/70 text-sm font-bold">
+                      貼逐字稿
+                    </span>
+                  </div>
+                  <div className="text-center">
+                    <Arrow label="把文字貼在這裡" dir="down" />
+                  </div>
+                  <div className="h-24 rounded-lg bg-white/10 border border-white/20 flex items-start p-3 text-white/40 text-sm">
+                    貼上影片的逐字稿或文案內容...
+                  </div>
+                </div>
+              </MockUI>
+              <p>貼完後一樣按 <span className="text-red-400 font-bold">「開始爆款分析」</span>，AI 會分析文案結構！</p>
+            </StepCard>
+
+            <div className="rounded-2xl border border-green-500/30 bg-green-500/5 p-6">
+              <h3 className="text-green-400 font-bold mb-2">哪種方法比較好？</h3>
+              <div className="space-y-2 text-sm text-white/70">
+                <p><span className="text-white font-bold">上傳影片</span> — 分析最完整，AI 會聽到語氣、節奏、口語表達</p>
+                <p><span className="text-white font-bold">貼逐字稿</span> — 最快速，幾秒鐘就能開始分析，適合文案型內容</p>
+                <p className="text-green-300 pt-1">兩種方式都能生成完整的腳本和標題！</p>
+              </div>
+            </div>
+          </>
+        )}
+
+        {/* ===== 實戰技巧 ===== */}
+        {tab === "tips" && (
+          <>
+            <div className="rounded-2xl border border-amber-500/30 bg-amber-500/5 p-6">
+              <h3 className="text-lg font-black text-white mb-2">用 Hookvox 拍出爆款的秘訣</h3>
+              <p className="text-white/70 text-sm">
+                工具只是輔助，怎麼用才是關鍵。這些技巧讓你的效率翻倍。
+              </p>
+            </div>
+
+            <Divider label="選片技巧" />
+
+            <StepCard num={1} title="挑對的影片來分析">
+              <p>不是隨便一支影片都適合分析。選片標準：</p>
+              <div className="space-y-2">
+                <div className="rounded-xl bg-green-900/20 border border-green-500/20 p-4">
+                  <div className="text-green-400 font-bold text-sm mb-2">要分析的影片</div>
+                  <ul className="list-disc list-inside text-white/70 text-sm space-y-1">
+                    <li>跟你<span className="text-white font-bold">同行業</span>的爆款（觀看數明顯高於平均）</li>
+                    <li>有<span className="text-white font-bold">口說內容</span>的影片（不是純音樂或舞蹈）</li>
+                    <li><span className="text-white font-bold">30 秒 ~ 3 分鐘</span>的影片（太短分析不出結構）</li>
+                    <li>最近 <span className="text-white font-bold">1~3 個月</span>內發的（趨勢還在）</li>
+                  </ul>
+                </div>
+                <div className="rounded-xl bg-red-900/20 border border-red-500/20 p-4">
+                  <div className="text-red-400 font-bold text-sm mb-2">不建議分析的影片</div>
+                  <ul className="list-disc list-inside text-white/70 text-sm space-y-1">
+                    <li>純跳舞/音樂/迷因影片（沒有腳本結構）</li>
+                    <li>紅人靠臉就紅的影片（跟內容公式無關）</li>
+                    <li>超過 5 分鐘的長影片（短影音公式不適用）</li>
+                  </ul>
+                </div>
+              </div>
+            </StepCard>
+
+            <Divider label="分析 → 生成最佳流程" />
+
+            <StepCard num={2} title="黃金工作流程">
+              <p>每天花 <span className="text-white font-bold">15 分鐘</span>，產出一週的內容：</p>
+              <MockUI>
+                <div className="space-y-4">
+                  <div className="flex items-start gap-3">
+                    <span className="flex-shrink-0 w-7 h-7 rounded-full bg-red-500 text-white font-bold text-xs flex items-center justify-center">1</span>
+                    <div>
+                      <div className="text-white font-bold text-sm">滑 IG / YT Shorts 找 3 支同行爆款</div>
+                      <div className="text-white/50 text-xs">花 5 分鐘，找觀看數特別高的影片</div>
+                    </div>
+                  </div>
+                  <div className="flex items-start gap-3">
+                    <span className="flex-shrink-0 w-7 h-7 rounded-full bg-red-500 text-white font-bold text-xs flex items-center justify-center">2</span>
+                    <div>
+                      <div className="text-white font-bold text-sm">全部丟進 Hookvox 分析</div>
+                      <div className="text-white/50 text-xs">上傳影片或貼逐字稿，3 支一起分析</div>
+                    </div>
+                  </div>
+                  <div className="flex items-start gap-3">
+                    <span className="flex-shrink-0 w-7 h-7 rounded-full bg-blue-500 text-white font-bold text-xs flex items-center justify-center">3</span>
+                    <div>
+                      <div className="text-white font-bold text-sm">每支生成腳本 + 用爆款延伸變 3 個角度</div>
+                      <div className="text-white/50 text-xs">3 支影片 × 3 個角度 = 9 個腳本靈感</div>
+                    </div>
+                  </div>
+                  <div className="flex items-start gap-3">
+                    <span className="flex-shrink-0 w-7 h-7 rounded-full bg-green-500 text-white font-bold text-xs flex items-center justify-center">4</span>
+                    <div>
+                      <div className="text-white font-bold text-sm">挑最好的 5~7 個去拍</div>
+                      <div className="text-white/50 text-xs">一週的內容就有了，每天一支</div>
+                    </div>
+                  </div>
+                </div>
+              </MockUI>
+            </StepCard>
+
+            <Divider label="進階技巧" />
+
+            <StepCard num={3} title="善用「套用到我的內容」">
+              <p>生成腳本時，<span className="text-white font-bold">「套用到我的內容」</span>欄位是你的秘密武器：</p>
+              <MockUI>
+                <div className="space-y-3">
+                  <div className="rounded-lg bg-white/5 p-3">
+                    <div className="text-white/50 text-xs mb-1">寫得好的範例</div>
+                    <div className="text-green-300 text-sm">「我是賣手工皂的，目標客群是 25-35 歲注重天然保養的女生，我的特色是用台灣在地植物萃取」</div>
+                  </div>
+                  <div className="rounded-lg bg-white/5 p-3">
+                    <div className="text-white/50 text-xs mb-1">寫得不好的範例</div>
+                    <div className="text-red-300 text-sm">「改成我的行業」</div>
+                  </div>
+                </div>
+              </MockUI>
+              <p className="text-white/60">寫越具體，AI 生成的腳本越貼近你的真實情況。</p>
+            </StepCard>
+
+            <StepCard num={4} title="分析完不要只看結果，要看「為什麼紅」">
+              <p>很多人分析完只看生成的腳本就跑了。但最有價值的是 <span className="text-white font-bold">分析摘要</span>：</p>
+              <ul className="list-disc list-inside text-white/70 space-y-1">
+                <li><span className="text-white font-bold">Hook 類型</span> — 學會這個類型，你可以自己套用到其他主題</li>
+                <li><span className="text-white font-bold">情緒拉力</span> — 了解這支影片觸發了觀眾什麼情緒</li>
+                <li><span className="text-white font-bold">結構拆解</span> — 看懂「開頭 → 中段 → 結尾」的節奏</li>
+              </ul>
+              <p className="text-amber-300 pt-2">看懂公式比複製腳本更重要。公式可以用一輩子，腳本只能用一次。</p>
+            </StepCard>
+
+            <StepCard num={5} title="用爆款資料庫累積你的靈感庫">
+              <p>每次分析的影片都會存在爆款資料庫裡。善用它：</p>
+              <ul className="list-disc list-inside text-white/70 space-y-1">
+                <li>把效果好的分析結果加入 <span className="text-red-400 font-bold">靈感簿</span></li>
+                <li>定期回來翻舊的分析，找到 <span className="text-white font-bold">你行業最有效的 Hook 模式</span></li>
+                <li>累積 20+ 支分析後，你會明顯感覺到 <span className="text-white font-bold">對爆款結構的直覺變強了</span></li>
+              </ul>
+            </StepCard>
+
+            <div className="rounded-2xl border border-red-500/30 bg-red-500/5 p-6">
+              <h3 className="text-red-400 font-bold mb-2">Hookvox vs 直接用 ChatGPT 的差別</h3>
+              <div className="space-y-2 text-sm text-white/70">
+                <p><span className="text-white font-bold">ChatGPT</span> — 你要自己寫 prompt、自己拆解影片結構、每次對話從零開始、沒有歷史資料</p>
+                <p><span className="text-white font-bold">Hookvox</span> — 貼連結就出結果、專業的爆款分析框架、所有分析自動建檔、越用資料庫越強</p>
+                <p className="text-red-300 pt-1">就像你可以用 Excel 記帳，但大部分人選擇用記帳 App。專門的工具永遠比通用工具更快、更準。</p>
+              </div>
+            </div>
+          </>
+        )}
+
         {/* ===== 爆款資料庫 ===== */}
         {tab === "database" && (
           <>
@@ -581,7 +808,7 @@ export default function GuidePage() {
                   <Arrow label="選好週期後，在想要的方案按「升級」" dir="down" />
                 </div>
               </MockUI>
-              <p>系統會引導你到綠界金流付款。付完款後方案立即生效。</p>
+              <p>系統會引導你到藍新金流付款頁面。付完款後方案立即生效。</p>
               <p className="text-white/60">升級差額計算：目標方案原價 - 目前已付款金額 = 你要補的差額</p>
             </StepCard>
 
