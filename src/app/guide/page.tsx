@@ -482,17 +482,18 @@ export default function GuidePage() {
 
             <Divider label="方法二：貼逐字稿（最快）" />
 
-            <StepCard num={3} title="複製 IG Reels 的字幕/文字">
-              <p>如果你只想快速分析文案和 Hook，不需要整支影片：</p>
+            <StepCard num={3} title="把影片內容打成逐字稿">
+              <p>如果你只想快速分析文案和 Hook，不需要下載整支影片：</p>
               <MockUI>
                 <div className="space-y-2 text-sm">
                   <ol className="list-decimal list-inside space-y-2 text-white/70">
-                    <li>打開 IG Reels → 看影片的 <span className="text-red-300 font-bold">說明文字（Caption）</span></li>
-                    <li>長按文字 → <span className="text-red-300 font-bold">複製</span></li>
-                    <li>或者邊看影片邊手打出影片中說的話</li>
+                    <li>打開 IG Reels → <span className="text-red-300 font-bold">邊看邊聽影片裡講了什麼</span></li>
+                    <li>把影片中 <span className="text-red-300 font-bold">說的每一句話</span> 打成文字（不用一字不漏，抓重點就好）</li>
+                    <li>特別注意記下 <span className="text-red-300 font-bold">開頭第一句話（Hook）</span> 和 <span className="text-red-300 font-bold">結尾的行動呼籲（CTA）</span></li>
                   </ol>
                 </div>
               </MockUI>
+              <p className="text-white/60">逐字稿就是影片裡「說了什麼」，不是 IG 貼文下面的說明文字。</p>
             </StepCard>
 
             <StepCard num={4} title="貼到 Hookvox 的逐字稿欄位">
