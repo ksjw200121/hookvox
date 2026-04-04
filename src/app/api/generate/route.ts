@@ -413,10 +413,9 @@ export async function POST(req: Request) {
 
     const publicUserId = usage.publicUserId ?? userId;
 
-    // 免費方案用 Haiku（省成本），付費方案用 Sonnet（高品質）
-    const isPaidPlan = usage.plan === "CREATOR" || usage.plan === "PRO" || usage.plan === "FLAGSHIP";
-    const selectedModel = isPaidPlan ? "claude-sonnet-4-6" : "claude-haiku-4-5-20251001";
-    const selectedMaxTokens = isPaidPlan ? 6000 : 4000;
+    // 全方案統一用 Haiku（省成本，品質已足夠）
+    const selectedModel = "claude-haiku-4-5-20251001";
+    const selectedMaxTokens = 4000;
 
     const finalTopic = userTopic || substitution || topic || "";
     const storyboardRequired = Boolean(wantStoryboard);
