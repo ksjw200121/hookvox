@@ -260,30 +260,57 @@ export default function AdminUserDetailPage({
       setLoading(true);
       setError("");
 
-      const [summaryJson, notesJson, auditJson, adjustmentJson] = await Promise.all([
-        authorizedFetch(`/api/admin/users/${encodeURIComponent(supabaseId)}/summary`, {
-          method: "GET",
-        }),
-        authorizedFetch(`/api/admin/users/${encodeURIComponent(supabaseId)}/notes`, {
-          method: "GET",
-        }),
-        authorizedFetch(`/api/admin/users/${encodeURIComponent(supabaseId)}/audit`, {
-          method: "GET",
-        }),
-        authorizedFetch(
-          `/api/admin/users/${encodeURIComponent(supabaseId)}/quota-adjustments`,
-          {
-            method: "GET",
-          }
-        ),
-      ]);
+      const encodedId = encodeURIComponent(supabaseId);
 
-      setSummary(summaryJson);
-      setNotes(Array.isArray(notesJson?.notes) ? notesJson.notes : []);
-      setAuditLogs(Array.isArray(auditJson?.logs) ? auditJson.logs : []);
-      setAdjustments(
-        Array.isArray(adjustmentJson?.adjustments) ? adjustmentJson.adjustments : []
+      const [summaryResult, notesResult, auditResult, adjustmentResult] =
+        await Promise.allSettled([
+          authorizedFetch(`/api/admin/users/${encodedId}/summary`, {
+            method: "GET",
+          }),
+          authorizedFetch(`/api/admin/users/${encodedId}/notes`, {
+            method: "GET",
+          }),
+          authorizedFetch(`/api/admin/users/${encodedId}/audit`, {
+            method: "GET",
+          }),
+          authorizedFetch(`/api/admin/users/${encodedId}/quota-adjustments`, {
+            method: "GET",
+          }),
+        ]);
+
+      if (summaryResult.status === "fulfilled") {
+        setSummary(summaryResult.value);
+      }
+      if (notesResult.status === "fulfilled") {
+        setNotes(
+          Array.isArray(notesResult.value?.notes) ? notesResult.value.notes : []
+        );
+      }
+      if (auditResult.status === "fulfilled") {
+        setAuditLogs(
+          Array.isArray(auditResult.value?.logs) ? auditResult.value.logs : []
+        );
+      }
+      if (adjustmentResult.status === "fulfilled") {
+        setAdjustments(
+          Array.isArray(adjustmentResult.value?.adjustments)
+            ? adjustmentResult.value.adjustments
+            : []
+        );
+      }
+
+      const failed = [summaryResult, notesResult, auditResult, adjustmentResult].filter(
+        (r) => r.status === "rejected"
       );
+
+      if (failed.length > 0 && summaryResult.status === "rejected") {
+        setError("讀取使用者詳情失敗");
+      } else if (failed.length > 0) {
+        console.warn(
+          "部分資料載入失敗:",
+          failed.map((f) => (f as PromiseRejectedResult).reason?.message)
+        );
+      }
     } catch (err: any) {
       setError(err?.message || "讀取使用者詳情失敗");
     } finally {
