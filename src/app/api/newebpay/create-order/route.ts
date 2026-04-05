@@ -244,7 +244,7 @@ export async function POST(req: Request) {
       ? Math.max(1, Math.round(fullAmount - currentAmount))
       : fullAmount;
 
-    const appUrl = process.env.NEXT_PUBLIC_APP_URL!;
+    const appUrl = (process.env.NEXT_PUBLIC_APP_URL || "").replace(/\/+$/, "");
     const notifyUrl = `${appUrl}/api/newebpay/notify`;
     const returnUrl = `${appUrl}/api/newebpay/return`;
     const clientBackUrl = `${appUrl}/plans`;
