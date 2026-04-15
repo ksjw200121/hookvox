@@ -135,10 +135,17 @@ function copyText(text: string) {
 
 async function readJsonSafe(res: Response) {
   const text = await res.text();
+  if (!text || !text.trim()) {
+    throw new Error("伺服器回應逾時，請稍後重試（手機網路較慢時請耐心等待或改用 Wi-Fi）");
+  }
   try {
     return JSON.parse(text);
   } catch {
-    throw new Error(`API 沒有回傳 JSON：${text.slice(0, 200)}`);
+    // Vercel 504 / 函數崩潰時會回傳 HTML 錯誤頁
+    if (text.includes("FUNCTION_INVOCATION") || text.includes("504") || text.includes("<html")) {
+      throw new Error("伺服器忙碌中，請稍後重試");
+    }
+    throw new Error(`分析失敗，請稍後重試（${text.slice(0, 100)}）`);
   }
 }
 
