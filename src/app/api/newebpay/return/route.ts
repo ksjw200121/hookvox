@@ -51,13 +51,33 @@ async function tryProcessResult(formData: FormData, stage: string) {
     return;
   }
 
-  if (!verifyTradeSha(encryptedTradeInfo, receivedTradeSha)) {
+  let shaValid = false;
+  try {
+    shaValid = verifyTradeSha(encryptedTradeInfo, receivedTradeSha);
+  } catch (shaErr: any) {
+    await logReturnEvent(supabaseAdmin, {}, stage, false, `TradeSha 驗證例外: ${String(shaErr?.message || shaErr)}`, false);
+    return;
+  }
+  if (!shaValid) {
     await logReturnEvent(supabaseAdmin, {}, stage, false, "TradeSha mismatch", false);
     return;
   }
 
-  const decrypted = decryptTradeInfo(encryptedTradeInfo);
-  const tradeResult = JSON.parse(decrypted);
+  let decrypted: string;
+  try {
+    decrypted = decryptTradeInfo(encryptedTradeInfo);
+  } catch (decryptErr: any) {
+    await logReturnEvent(supabaseAdmin, {}, stage, false, `TradeInfo 解密失敗: ${String(decryptErr?.message || decryptErr)}`, true);
+    return;
+  }
+
+  let tradeResult: Record<string, any> = {};
+  try {
+    tradeResult = JSON.parse(decrypted);
+  } catch (parseErr: any) {
+    await logReturnEvent(supabaseAdmin, {}, stage, false, `JSON 解析失敗: ${String(parseErr?.message || parseErr)}`, true);
+    return;
+  }
 
   if (tradeResult.Status !== "SUCCESS") {
     await logReturnEvent(supabaseAdmin, tradeResult, stage, true, `Status=${tradeResult.Status}`, true);
