@@ -69,7 +69,8 @@ export async function POST(
     });
 
     if (action === "sync_latest_paid_order") {
-      const latestPaidOrder = await prisma.order.findFirst({
+      // 先找 PAID / SUCCESS 訂單；找不到時退而求其次找 PENDING（webhook 失敗的情況）
+      let latestPaidOrder = await prisma.order.findFirst({
         where: {
           userId: targetUser.id,
           status: {
@@ -89,11 +90,47 @@ export async function POST(
         },
       });
 
+      // 若無 PAID 訂單，嘗試找最近 24 小時內的 PENDING 訂單（付款成功但 webhook 未通知）
+      if (!latestPaidOrder) {
+        const oneDayAgo = new Date(Date.now() - 24 * 60 * 60 * 1000);
+        latestPaidOrder = await prisma.order.findFirst({
+          where: {
+            userId: targetUser.id,
+            status: "PENDING",
+            createdAt: { gte: oneDayAgo },
+          },
+          orderBy: [{ createdAt: "desc" }],
+          select: {
+            id: true,
+            plan: true,
+            billingCycle: true,
+            tradeNo: true,
+            merchantTradeNo: true,
+            paidAt: true,
+            createdAt: true,
+            status: true,
+          },
+        });
+      }
+
       if (!latestPaidOrder) {
         return NextResponse.json(
-          { error: "找不到最近已付款訂單" },
+          { error: "找不到有效的已付款或待付款訂單" },
           { status: 400 }
         );
+      }
+
+      // 若是 PENDING 訂單，先把它標為 PAID
+      if (latestPaidOrder.status === "PENDING") {
+        await prisma.order.update({
+          where: { id: latestPaidOrder.id },
+          data: {
+            status: "PAID",
+            paidAt: new Date(),
+            updatedAt: new Date(),
+          },
+        });
+        latestPaidOrder = { ...latestPaidOrder, status: "PAID", paidAt: new Date() };
       }
 
       const startDate = latestPaidOrder.paidAt || latestPaidOrder.createdAt;

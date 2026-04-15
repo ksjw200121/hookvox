@@ -80,7 +80,20 @@ export async function POST(req: Request) {
     }
 
     // 驗證 TradeSha
-    if (!verifyTradeSha(encryptedTradeInfo, receivedTradeSha)) {
+    let shaValid = false;
+    try {
+      shaValid = verifyTradeSha(encryptedTradeInfo, receivedTradeSha);
+    } catch (shaErr: any) {
+      await logWebhookEvent(supabaseAdmin, req, { Status: status, MerchantID: merchantID }, {
+        ok: false,
+        stage: "TRADE_SHA_EXCEPTION",
+        message: `TradeSha 驗證例外: ${String(shaErr?.message || shaErr)}`,
+        checkMacValid: false,
+      });
+      return new Response("TradeSha 驗證失敗", { status: 400 });
+    }
+
+    if (!shaValid) {
       await logWebhookEvent(supabaseAdmin, req, { Status: status, MerchantID: merchantID }, {
         ok: false,
         stage: "TRADE_SHA_INVALID",
@@ -91,8 +104,35 @@ export async function POST(req: Request) {
     }
 
     // 解密 TradeInfo
-    const decrypted = decryptTradeInfo(encryptedTradeInfo);
-    tradeResult = JSON.parse(decrypted);
+    let decrypted: string;
+    try {
+      decrypted = decryptTradeInfo(encryptedTradeInfo);
+    } catch (decryptErr: any) {
+      await logWebhookEvent(supabaseAdmin, req, { Status: status, MerchantID: merchantID }, {
+        ok: false,
+        stage: "DECRYPT_EXCEPTION",
+        message: `TradeInfo 解密失敗: ${String(decryptErr?.message || decryptErr)}`,
+        checkMacValid: true,
+      });
+      return new Response("解密失敗", { status: 400 });
+    }
+
+    let parseErr: any = null;
+    try {
+      tradeResult = JSON.parse(decrypted);
+    } catch (e: any) {
+      parseErr = e;
+    }
+
+    if (parseErr || typeof tradeResult !== "object" || tradeResult === null) {
+      await logWebhookEvent(supabaseAdmin, req, { Status: status, MerchantID: merchantID }, {
+        ok: false,
+        stage: "PARSE_EXCEPTION",
+        message: `TradeInfo JSON 解析失敗: ${String(parseErr?.message || "非 JSON 格式")} | raw=${decrypted?.slice(0, 200)}`,
+        checkMacValid: true,
+      });
+      return new Response("解析失敗", { status: 400 });
+    }
 
     // 防重播：同一筆交易已處理成功過，直接回應
     const existingOrderNo = tradeResult.MerchantOrderNo;
