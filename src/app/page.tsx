@@ -1,6 +1,7 @@
 import Link from "next/link";
 import { Reveal } from "@/components/Reveal";
 import { FAQ } from "@/components/FAQ";
+import EbookBanner from "@/components/EbookBanner";
 
 type PricingCard = {
   name: string;
@@ -545,6 +546,11 @@ export default function HomePage() {
           </Reveal>
         </div>
       </section>
+
+      {/* ── EBOOK ── */}
+      <Reveal>
+        <EbookBanner variant="full" />
+      </Reveal>
 
       {/* ── FINAL CTA ── */}
       <Reveal>

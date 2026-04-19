@@ -4,6 +4,7 @@ import { useState, useEffect } from 'react'
 import Link from 'next/link'
 import { supabase } from '@/lib/supabase'
 import { USAGE_UPDATED_EVENT, type UsageUpdatedDetail } from '@/lib/usage-events'
+import EbookBanner from '@/components/EbookBanner'
 
 type BillingCycle = 'monthly' | 'quarterly' | 'biannual' | 'annual'
 
@@ -533,6 +534,9 @@ export default function PlansPage() {
             : FLAGSHIP.cta}
         </button>
       </div>
+
+      {/* ── 電子書橫幅 ── */}
+      <EbookBanner variant="compact" />
 
       <div className="glass rounded-2xl p-8">
         <h3 className="font-bold text-xl mb-6">常見問題</h3>
