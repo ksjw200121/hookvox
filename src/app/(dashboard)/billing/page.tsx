@@ -4,6 +4,7 @@ import { useEffect, useState } from "react";
 import Link from "next/link";
 import { createClient } from "@/lib/supabase/client";
 import { USAGE_UPDATED_EVENT, type UsageUpdatedDetail } from "@/lib/usage-events";
+import EbookBanner from "@/components/EbookBanner";
 
 const PLAN_LABELS: Record<string, string> = {
   FREE: "免費方案",
@@ -562,6 +563,9 @@ const isExpiringSoon =
           </div>
         )}
       </div>
+
+      {/* ── 電子書橫幅 ── */}
+      <EbookBanner variant="compact" />
 
       {/* 取消／不續訂說明 */}
       {isPaid && subscription && subscription.plan !== "FREE" && (
