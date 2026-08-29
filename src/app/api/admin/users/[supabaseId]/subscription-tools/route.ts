@@ -90,14 +90,34 @@ export async function POST(
         },
       });
 
-      // 若無 PAID 訂單，嘗試找最近 24 小時內的 PENDING 訂單（付款成功但 webhook 未通知）
+      // 若無 PAID 訂單，退而求其次找最近一筆 PENDING 訂單（webhook 未通知或通知失敗的情況）
+      // 不限制時間窗口：admin 手動同步是刻意的人工覆蓋操作，時間限制只會造成「明明有訂單卻同步不到」
       if (!latestPaidOrder) {
-        const oneDayAgo = new Date(Date.now() - 24 * 60 * 60 * 1000);
         latestPaidOrder = await prisma.order.findFirst({
           where: {
             userId: targetUser.id,
             status: "PENDING",
-            createdAt: { gte: oneDayAgo },
+          },
+          orderBy: [{ createdAt: "desc" }],
+          select: {
+            id: true,
+            plan: true,
+            billingCycle: true,
+            tradeNo: true,
+            merchantTradeNo: true,
+            paidAt: true,
+            createdAt: true,
+            status: true,
+          },
+        });
+      }
+
+      // 仍然找不到：最後退而求其次，抓這個使用者「不論狀態」最新一筆訂單
+      // （例如訂單被寫成非預期的狀態字串），交給 admin 人工確認後同步
+      if (!latestPaidOrder) {
+        latestPaidOrder = await prisma.order.findFirst({
+          where: {
+            userId: targetUser.id,
           },
           orderBy: [{ createdAt: "desc" }],
           select: {
@@ -115,13 +135,13 @@ export async function POST(
 
       if (!latestPaidOrder) {
         return NextResponse.json(
-          { error: "找不到有效的已付款或待付款訂單" },
+          { error: "這個使用者名下完全沒有任何訂單紀錄，請確認建立訂單（create-order）步驟是否有成功寫入資料庫" },
           { status: 400 }
         );
       }
 
-      // 若是 PENDING 訂單，先把它標為 PAID
-      if (latestPaidOrder.status === "PENDING") {
+      // 若不是已經標記為 PAID/SUCCESS 的訂單，先把它標為 PAID（人工覆蓋）
+      if (latestPaidOrder.status !== "PAID" && latestPaidOrder.status !== "SUCCESS") {
         await prisma.order.update({
           where: { id: latestPaidOrder.id },
           data: {
